@@ -20,19 +20,65 @@ const wallpapers = [
   { id: 'noble', label: 'Noble Numbat', color: 'linear-gradient(135deg, hsl(40,50%,10%) 0%, hsl(50,40%,20%) 100%)' },
 ];
 
-const mockUsers = [
-  { id: 1, name: 'admin', role: 'Administrator', active: true },
-  { id: 2, name: 'user1', role: 'Standard', active: true },
-  { id: 3, name: 'operator', role: 'Standard', active: false },
+interface UserData {
+  id: number;
+  username: string;
+  fullName: string;
+  phone: string;
+  email: string;
+  password: string;
+  nationalId: string;
+  role: string;
+  active: boolean;
+}
+
+const emptyUser: Omit<UserData, 'id'> = {
+  username: '', fullName: '', phone: '', email: '', password: '', nationalId: '', role: 'Standard', active: true,
+};
+
+const mockUsers: UserData[] = [
+  { id: 1, username: 'admin', fullName: 'System Administrator', phone: '+1234567890', email: 'admin@system.local', password: '••••••', nationalId: '1234567890', role: 'Administrator', active: true },
+  { id: 2, username: 'user1', fullName: 'John Doe', phone: '+1987654321', email: 'john@system.local', password: '••••••', nationalId: '0987654321', role: 'Standard', active: true },
+  { id: 3, username: 'operator', fullName: 'Jane Smith', phone: '', email: 'jane@system.local', password: '••••••', nationalId: '', role: 'Standard', active: false },
 ];
 
 const SettingsApp = () => {
   const [activeSection, setActiveSection] = useState('appearance');
   const { wallpaper, setWallpaper, accentColor, setAccentColor } = useOSStore();
-  const [users, setUsers] = useState(mockUsers);
+  const [users, setUsers] = useState<UserData[]>(mockUsers);
   const [fontSize, setFontSize] = useState(100);
   const [highContrast, setHighContrast] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserData | null>(null);
+  const [isNewUser, setIsNewUser] = useState(false);
+
+  const handleAddUser = () => {
+    const newUser: UserData = { ...emptyUser, id: Date.now() };
+    setEditingUser(newUser);
+    setIsNewUser(true);
+  };
+
+  const handleEditUser = (user: UserData) => {
+    setEditingUser({ ...user });
+    setIsNewUser(false);
+  };
+
+  const handleSaveUser = () => {
+    if (!editingUser) return;
+    if (!editingUser.username.trim()) return;
+    if (isNewUser) {
+      setUsers([...users, editingUser]);
+    } else {
+      setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
+    }
+    setEditingUser(null);
+    setIsNewUser(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingUser(null);
+    setIsNewUser(false);
+  };
 
   const renderContent = () => {
     switch (activeSection) {
@@ -112,39 +158,92 @@ const SettingsApp = () => {
       case 'users':
         return (
           <div className="p-6 space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-medium text-foreground">Users</h2>
-              <button
-                onClick={() => setUsers([...users, { id: Date.now(), name: `user${users.length + 1}`, role: 'Standard', active: true }])}
-                className="px-3 py-1.5 text-xs rounded-window-inner bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
-              >
-                Add User
-              </button>
-            </div>
-            <div className="space-y-2">
-              {users.map(user => (
-                <div key={user.id} className="flex items-center justify-between p-3 rounded-window-inner bg-secondary">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm">👤</div>
-                    <div>
-                      <div className="text-sm font-medium text-foreground">{user.name}</div>
-                      <div className="text-xs text-muted-foreground">{user.role}</div>
-                    </div>
+            {editingUser ? (
+              /* User edit form */
+              <div className="space-y-5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-medium text-foreground">{isNewUser ? 'Add User' : 'Edit User'}</h2>
+                  <div className="flex gap-2">
+                    <button onClick={handleCancelEdit} className="px-3 py-1.5 text-xs rounded-window-inner bg-secondary text-foreground hover:opacity-80 transition-opacity">Cancel</button>
+                    <button onClick={handleSaveUser} className="px-3 py-1.5 text-xs rounded-window-inner bg-primary text-primary-foreground hover:opacity-90 transition-opacity">Save</button>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${user.active ? 'bg-green-500/20 text-green-400' : 'bg-muted text-muted-foreground'}`}>
-                      {user.active ? 'Active' : 'Inactive'}
-                    </span>
-                    <button
-                      onClick={() => setUsers(users.filter(u => u.id !== user.id))}
-                      className="text-xs text-destructive hover:text-destructive/80 transition-colors"
+                </div>
+                <div className="space-y-3">
+                  {([
+                    { key: 'username', label: 'Username', type: 'text', placeholder: 'e.g. johndoe' },
+                    { key: 'fullName', label: 'Full Name', type: 'text', placeholder: 'e.g. John Doe' },
+                    { key: 'phone', label: 'Phone Number', type: 'tel', placeholder: 'e.g. +1234567890' },
+                    { key: 'email', label: 'Email', type: 'email', placeholder: 'e.g. john@example.com' },
+                    { key: 'password', label: isNewUser ? 'Default Password' : 'Password', type: 'password', placeholder: isNewUser ? 'Set default password' : 'Change password' },
+                    { key: 'nationalId', label: 'National ID', type: 'text', placeholder: 'e.g. 1234567890' },
+                  ] as const).map(field => (
+                    <div key={field.key} className="flex flex-col gap-1.5">
+                      <label className="text-xs text-muted-foreground">{field.label}</label>
+                      <input
+                        type={field.type}
+                        value={editingUser[field.key as keyof UserData] as string}
+                        onChange={e => setEditingUser({ ...editingUser, [field.key]: e.target.value })}
+                        placeholder={field.placeholder}
+                        className="h-9 px-3 rounded-window-inner bg-secondary text-foreground text-sm placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                  ))}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-muted-foreground">Role</label>
+                    <select
+                      value={editingUser.role}
+                      onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
+                      className="h-9 px-3 rounded-window-inner bg-secondary text-foreground text-sm border border-border focus:outline-none focus:ring-2 focus:ring-primary"
                     >
-                      Remove
+                      <option value="Standard">Standard</option>
+                      <option value="Administrator">Administrator</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-window-inner bg-secondary">
+                    <span className="text-sm text-foreground">Active</span>
+                    <button onClick={() => setEditingUser({ ...editingUser, active: !editingUser.active })} className={`w-10 h-5 rounded-full transition-colors ${editingUser.active ? 'bg-primary' : 'bg-muted'}`}>
+                      <div className={`w-4 h-4 rounded-full bg-foreground transition-transform ${editingUser.active ? 'translate-x-5' : 'translate-x-0.5'}`} />
                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ) : (
+              /* User list */
+              <>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-medium text-foreground">Users</h2>
+                  <button onClick={handleAddUser} className="px-3 py-1.5 text-xs rounded-window-inner bg-primary text-primary-foreground hover:opacity-90 transition-opacity">Add User</button>
+                </div>
+                <div className="space-y-2">
+                  {users.map(user => (
+                    <div
+                      key={user.id}
+                      onClick={() => handleEditUser(user)}
+                      className="flex items-center justify-between p-3 rounded-window-inner bg-secondary hover:bg-secondary/80 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm">👤</div>
+                        <div>
+                          <div className="text-sm font-medium text-foreground">{user.fullName || user.username}</div>
+                          <div className="text-xs text-muted-foreground">{user.role} · {user.username}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${user.active ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                          {user.active ? 'Active' : 'Inactive'}
+                        </span>
+                        <button
+                          onClick={e => { e.stopPropagation(); setUsers(users.filter(u => u.id !== user.id)); }}
+                          className="text-xs text-destructive hover:text-destructive/80 transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         );
 
