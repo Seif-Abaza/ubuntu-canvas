@@ -10,13 +10,20 @@ import IPFSExplorer from '@/components/apps/IPFSExplorer';
 import FabricNetwork from '@/components/apps/FabricNetwork';
 import { AnimatePresence } from 'framer-motion';
 
-const wallpaperStyles: Record<string, string> = {
-  default: 'linear-gradient(135deg, hsl(268,55%,9%) 0%, hsl(280,40%,18%) 50%, hsl(268,55%,9%) 100%)',
-  focal: 'linear-gradient(135deg, hsl(220,40%,10%) 0%, hsl(200,50%,20%) 100%)',
-  kinetic: 'linear-gradient(135deg, hsl(16,60%,12%) 0%, hsl(30,40%,18%) 100%)',
-  lunar: 'linear-gradient(135deg, hsl(180,30%,8%) 0%, hsl(160,40%,15%) 100%)',
-  mantic: 'linear-gradient(135deg, hsl(300,30%,10%) 0%, hsl(320,40%,18%) 100%)',
-  noble: 'linear-gradient(135deg, hsl(40,50%,10%) 0%, hsl(50,40%,20%) 100%)',
+import wpDefault from '@/assets/wallpaper-default.jpg';
+import wpFocal from '@/assets/wallpaper-focal.jpg';
+import wpKinetic from '@/assets/wallpaper-kinetic.jpg';
+import wpLunar from '@/assets/wallpaper-lunar.jpg';
+import wpMantic from '@/assets/wallpaper-mantic.jpg';
+import wpNoble from '@/assets/wallpaper-noble.jpg';
+
+export const wallpaperImages: Record<string, string> = {
+  default: wpDefault,
+  focal: wpFocal,
+  kinetic: wpKinetic,
+  lunar: wpLunar,
+  mantic: wpMantic,
+  noble: wpNoble,
 };
 
 const appContent: Record<string, React.ReactNode> = {
@@ -44,10 +51,10 @@ const Desktop = () => {
 
   return (
     <div
-      className="fixed inset-0"
+      className="fixed inset-0 bg-cover bg-center bg-no-repeat"
       onContextMenu={handleContextMenu}
       onClick={() => useOSStore.getState().hideContextMenu()}
-      style={{ background: wallpaperStyles[wallpaper] || wallpaperStyles.default }}
+      style={{ backgroundImage: `url(${wallpaperImages[wallpaper] || wallpaperImages.default})` }}
     >
       <TopBar />
       <Dock />
