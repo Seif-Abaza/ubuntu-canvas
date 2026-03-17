@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useOSStore } from '@/store/os-store';
+import { wallpaperImages } from '@/components/os/Desktop';
 
 const settingsSections = [
   { id: 'appearance', label: 'Appearance', icon: '🎨' },
@@ -72,10 +73,10 @@ const SettingsApp = () => {
                 <button
                   key={wp.id}
                   onClick={() => setWallpaper(wp.id)}
-                  className={`h-20 rounded-window-inner border-2 transition-all ${wallpaper === wp.id ? 'border-primary' : 'border-transparent hover:border-muted-foreground/30'}`}
-                  style={{ background: wp.color }}
+                  className={`h-20 rounded-window-inner border-2 transition-all overflow-hidden relative ${wallpaper === wp.id ? 'border-primary' : 'border-transparent hover:border-muted-foreground/30'}`}
                 >
-                  <span className="text-[10px] text-foreground/70">{wp.label}</span>
+                  <img src={wallpaperImages[wp.id]} alt={wp.label} className="absolute inset-0 w-full h-full object-cover" />
+                  <span className="relative text-[10px] text-foreground/90 font-medium drop-shadow-md">{wp.label}</span>
                 </button>
               ))}
             </div>
