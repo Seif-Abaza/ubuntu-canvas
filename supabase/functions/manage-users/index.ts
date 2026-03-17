@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
         const result = profiles?.map(p => ({
           ...p,
           email: emailMap.get(p.user_id) || "",
-          role: p.user_roles?.[0]?.role || "user",
+          role: roleMap.get(p.user_id) || "user",
         }));
 
         return new Response(JSON.stringify(result), {
