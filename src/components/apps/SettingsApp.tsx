@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useOSStore } from '@/store/os-store';
 import { wallpaperImages } from '@/components/os/Desktop';
+import { supabase } from '@/integrations/supabase/client';
 
 const settingsSections = [
   { id: 'appearance', label: 'Appearance', icon: '🎨' },
@@ -12,16 +13,16 @@ const settingsSections = [
 ];
 
 const wallpapers = [
-  { id: 'default', label: 'Jammy Jellyfish', color: 'linear-gradient(135deg, hsl(268,55%,9%) 0%, hsl(280,40%,18%) 50%, hsl(268,55%,9%) 100%)' },
-  { id: 'focal', label: 'Focal Fossa', color: 'linear-gradient(135deg, hsl(220,40%,10%) 0%, hsl(200,50%,20%) 100%)' },
-  { id: 'kinetic', label: 'Kinetic Kudu', color: 'linear-gradient(135deg, hsl(16,60%,12%) 0%, hsl(30,40%,18%) 100%)' },
-  { id: 'lunar', label: 'Lunar Lobster', color: 'linear-gradient(135deg, hsl(180,30%,8%) 0%, hsl(160,40%,15%) 100%)' },
-  { id: 'mantic', label: 'Mantic Minotaur', color: 'linear-gradient(135deg, hsl(300,30%,10%) 0%, hsl(320,40%,18%) 100%)' },
-  { id: 'noble', label: 'Noble Numbat', color: 'linear-gradient(135deg, hsl(40,50%,10%) 0%, hsl(50,40%,20%) 100%)' },
+  { id: 'default', label: 'Jammy Jellyfish' },
+  { id: 'focal', label: 'Focal Fossa' },
+  { id: 'kinetic', label: 'Kinetic Kudu' },
+  { id: 'lunar', label: 'Lunar Lobster' },
+  { id: 'mantic', label: 'Mantic Minotaur' },
+  { id: 'noble', label: 'Noble Numbat' },
 ];
 
 interface UserData {
-  id: number;
+  userId: string;
   username: string;
   fullName: string;
   phone: string;
@@ -32,52 +33,126 @@ interface UserData {
   active: boolean;
 }
 
-const emptyUser: Omit<UserData, 'id'> = {
-  username: '', fullName: '', phone: '', email: '', password: '', nationalId: '', role: 'Standard', active: true,
+const emptyUser: UserData = {
+  userId: '', username: '', fullName: '', phone: '', email: '', password: '', nationalId: '', role: 'user', active: true,
 };
-
-const mockUsers: UserData[] = [
-  { id: 1, username: 'admin', fullName: 'System Administrator', phone: '+1234567890', email: 'admin@system.local', password: '••••••', nationalId: '1234567890', role: 'Administrator', active: true },
-  { id: 2, username: 'user1', fullName: 'John Doe', phone: '+1987654321', email: 'john@system.local', password: '••••••', nationalId: '0987654321', role: 'Standard', active: true },
-  { id: 3, username: 'operator', fullName: 'Jane Smith', phone: '', email: 'jane@system.local', password: '••••••', nationalId: '', role: 'Standard', active: false },
-];
 
 const SettingsApp = () => {
   const [activeSection, setActiveSection] = useState('appearance');
-  const { wallpaper, setWallpaper, accentColor, setAccentColor } = useOSStore();
-  const [users, setUsers] = useState<UserData[]>(mockUsers);
+  const { wallpaper, setWallpaper, accentColor, setAccentColor, isAdmin } = useOSStore();
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [userError, setUserError] = useState('');
   const [fontSize, setFontSize] = useState(100);
   const [highContrast, setHighContrast] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [editingUser, setEditingUser] = useState<UserData | null>(null);
   const [isNewUser, setIsNewUser] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const loadUsers = useCallback(async () => {
+    if (!isAdmin) return;
+    setUsersLoading(true);
+    setUserError('');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data, error } = await supabase.functions.invoke('manage-users', {
+        body: { action: 'list' },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      const mapped: UserData[] = (data || []).map((u: any) => ({
+        userId: u.user_id,
+        username: u.username || '',
+        fullName: u.full_name || '',
+        phone: u.phone || '',
+        email: u.email || '',
+        password: '••••••',
+        nationalId: u.national_id || '',
+        role: u.role || 'user',
+        active: u.active !== false,
+      }));
+      setUsers(mapped);
+    } catch (err: any) {
+      setUserError(err.message || 'Failed to load users');
+    } finally {
+      setUsersLoading(false);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (activeSection === 'users' && isAdmin) {
+      loadUsers();
+    }
+  }, [activeSection, isAdmin, loadUsers]);
 
   const handleAddUser = () => {
-    const newUser: UserData = { ...emptyUser, id: Date.now() };
-    setEditingUser(newUser);
+    setEditingUser({ ...emptyUser });
     setIsNewUser(true);
+    setUserError('');
   };
 
   const handleEditUser = (user: UserData) => {
     setEditingUser({ ...user });
     setIsNewUser(false);
+    setUserError('');
   };
 
-  const handleSaveUser = () => {
+  const handleSaveUser = async () => {
     if (!editingUser) return;
-    if (!editingUser.username.trim()) return;
-    if (isNewUser) {
-      setUsers([...users, editingUser]);
-    } else {
-      setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
+    if (!editingUser.username.trim()) { setUserError('Username is required'); return; }
+    if (isNewUser && !editingUser.email.trim()) { setUserError('Email is required'); return; }
+    if (isNewUser && !editingUser.password.trim()) { setUserError('Password is required'); return; }
+
+    setSaving(true);
+    setUserError('');
+    try {
+      const action = isNewUser ? 'create' : 'update';
+      const { data, error } = await supabase.functions.invoke('manage-users', {
+        body: {
+          action,
+          userId: editingUser.userId || undefined,
+          username: editingUser.username,
+          fullName: editingUser.fullName,
+          phone: editingUser.phone,
+          email: editingUser.email,
+          password: editingUser.password,
+          nationalId: editingUser.nationalId,
+          role: editingUser.role,
+          active: editingUser.active,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setEditingUser(null);
+      setIsNewUser(false);
+      await loadUsers();
+    } catch (err: any) {
+      setUserError(err.message || 'Failed to save user');
+    } finally {
+      setSaving(false);
     }
-    setEditingUser(null);
-    setIsNewUser(false);
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    setUserError('');
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-users', {
+        body: { action: 'delete', userId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      await loadUsers();
+    } catch (err: any) {
+      setUserError(err.message || 'Failed to delete user');
+    }
   };
 
   const handleCancelEdit = () => {
     setEditingUser(null);
     setIsNewUser(false);
+    setUserError('');
   };
 
   const renderContent = () => {
@@ -156,16 +231,28 @@ const SettingsApp = () => {
         );
 
       case 'users':
+        if (!isAdmin) {
+          return (
+            <div className="p-6">
+              <h2 className="text-lg font-medium text-foreground mb-4">Users</h2>
+              <p className="text-sm text-muted-foreground">Admin access required to manage users.</p>
+            </div>
+          );
+        }
         return (
           <div className="p-6 space-y-6">
+            {userError && (
+              <div className="p-2 rounded-window-inner bg-destructive/10 text-destructive text-xs">{userError}</div>
+            )}
             {editingUser ? (
-              /* User edit form */
               <div className="space-y-5">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-medium text-foreground">{isNewUser ? 'Add User' : 'Edit User'}</h2>
                   <div className="flex gap-2">
                     <button onClick={handleCancelEdit} className="px-3 py-1.5 text-xs rounded-window-inner bg-secondary text-foreground hover:opacity-80 transition-opacity">Cancel</button>
-                    <button onClick={handleSaveUser} className="px-3 py-1.5 text-xs rounded-window-inner bg-primary text-primary-foreground hover:opacity-90 transition-opacity">Save</button>
+                    <button onClick={handleSaveUser} disabled={saving} className="px-3 py-1.5 text-xs rounded-window-inner bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50">
+                      {saving ? 'Saving...' : 'Save'}
+                    </button>
                   </div>
                 </div>
                 <div className="space-y-3">
@@ -173,18 +260,19 @@ const SettingsApp = () => {
                     { key: 'username', label: 'Username', type: 'text', placeholder: 'e.g. johndoe' },
                     { key: 'fullName', label: 'Full Name', type: 'text', placeholder: 'e.g. John Doe' },
                     { key: 'phone', label: 'Phone Number', type: 'tel', placeholder: 'e.g. +1234567890' },
-                    { key: 'email', label: 'Email', type: 'email', placeholder: 'e.g. john@example.com' },
-                    { key: 'password', label: isNewUser ? 'Default Password' : 'Password', type: 'password', placeholder: isNewUser ? 'Set default password' : 'Change password' },
+                    { key: 'email', label: 'Email', type: 'email', placeholder: 'e.g. john@example.com', disabled: !isNewUser },
+                    { key: 'password', label: isNewUser ? 'Default Password' : 'Password', type: 'password', placeholder: isNewUser ? 'Set default password' : 'Leave blank to keep current' },
                     { key: 'nationalId', label: 'National ID', type: 'text', placeholder: 'e.g. 1234567890' },
-                  ] as const).map(field => (
+                  ] as { key: string; label: string; type: string; placeholder: string; disabled?: boolean }[]).map(field => (
                     <div key={field.key} className="flex flex-col gap-1.5">
                       <label className="text-xs text-muted-foreground">{field.label}</label>
                       <input
                         type={field.type}
-                        value={editingUser[field.key as keyof UserData] as string}
+                        value={(editingUser as any)[field.key] as string}
                         onChange={e => setEditingUser({ ...editingUser, [field.key]: e.target.value })}
                         placeholder={field.placeholder}
-                        className="h-9 px-3 rounded-window-inner bg-secondary text-foreground text-sm placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+                        disabled={field.disabled}
+                        className="h-9 px-3 rounded-window-inner bg-secondary text-foreground text-sm placeholder:text-muted-foreground border border-border focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                       />
                     </div>
                   ))}
@@ -195,8 +283,8 @@ const SettingsApp = () => {
                       onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
                       className="h-9 px-3 rounded-window-inner bg-secondary text-foreground text-sm border border-border focus:outline-none focus:ring-2 focus:ring-primary"
                     >
-                      <option value="Standard">Standard</option>
-                      <option value="Administrator">Administrator</option>
+                      <option value="user">Standard</option>
+                      <option value="admin">Administrator</option>
                     </select>
                   </div>
                   <div className="flex items-center justify-between p-3 rounded-window-inner bg-secondary">
@@ -208,40 +296,46 @@ const SettingsApp = () => {
                 </div>
               </div>
             ) : (
-              /* User list */
               <>
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-medium text-foreground">Users</h2>
                   <button onClick={handleAddUser} className="px-3 py-1.5 text-xs rounded-window-inner bg-primary text-primary-foreground hover:opacity-90 transition-opacity">Add User</button>
                 </div>
-                <div className="space-y-2">
-                  {users.map(user => (
-                    <div
-                      key={user.id}
-                      onClick={() => handleEditUser(user)}
-                      className="flex items-center justify-between p-3 rounded-window-inner bg-secondary hover:bg-secondary/80 cursor-pointer transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm">👤</div>
-                        <div>
-                          <div className="text-sm font-medium text-foreground">{user.fullName || user.username}</div>
-                          <div className="text-xs text-muted-foreground">{user.role} · {user.username}</div>
+                {usersLoading ? (
+                  <div className="text-sm text-muted-foreground animate-pulse">Loading users...</div>
+                ) : (
+                  <div className="space-y-2">
+                    {users.map(user => (
+                      <div
+                        key={user.userId}
+                        onClick={() => handleEditUser(user)}
+                        className="flex items-center justify-between p-3 rounded-window-inner bg-secondary hover:bg-secondary/80 cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm">👤</div>
+                          <div>
+                            <div className="text-sm font-medium text-foreground">{user.fullName || user.username}</div>
+                            <div className="text-xs text-muted-foreground">{user.role === 'admin' ? 'Administrator' : 'Standard'} · {user.email}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full ${user.active ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                            {user.active ? 'Active' : 'Inactive'}
+                          </span>
+                          <button
+                            onClick={e => { e.stopPropagation(); handleDeleteUser(user.userId); }}
+                            className="text-xs text-destructive hover:text-destructive/80 transition-colors"
+                          >
+                            Remove
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${user.active ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                          {user.active ? 'Active' : 'Inactive'}
-                        </span>
-                        <button
-                          onClick={e => { e.stopPropagation(); setUsers(users.filter(u => u.id !== user.id)); }}
-                          className="text-xs text-destructive hover:text-destructive/80 transition-colors"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                    {users.length === 0 && !usersLoading && (
+                      <div className="text-sm text-muted-foreground">No users found.</div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -253,11 +347,11 @@ const SettingsApp = () => {
             <h2 className="text-lg font-medium text-foreground">Network</h2>
             <div className="space-y-3">
               <div className="p-3 rounded-window-inner bg-secondary">
-                <div className="flex justify-between text-sm text-foreground"><span>IPFS Node</span><span className="text-green-400">● Online</span></div>
+                <div className="flex justify-between text-sm text-foreground"><span>IPFS Node</span><span className="text-primary">● Online</span></div>
                 <div className="text-xs text-muted-foreground mt-1 font-ubuntu-mono">Peers: 12 | Gateway: localhost:8080</div>
               </div>
               <div className="p-3 rounded-window-inner bg-secondary">
-                <div className="flex justify-between text-sm text-foreground"><span>Fabric Network</span><span className="text-green-400">● Connected</span></div>
+                <div className="flex justify-between text-sm text-foreground"><span>Fabric Network</span><span className="text-primary">● Connected</span></div>
                 <div className="text-xs text-muted-foreground mt-1 font-ubuntu-mono">Org: Org1MSP | Channel: mychannel</div>
               </div>
             </div>
