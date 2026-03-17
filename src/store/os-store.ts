@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface AppWindow {
   id: string;
@@ -23,6 +24,9 @@ export interface DockApp {
 interface OSState {
   isLoggedIn: boolean;
   username: string;
+  userId: string | null;
+  isAdmin: boolean;
+  isLoading: boolean;
   wallpaper: string;
   accentColor: string;
   windows: AppWindow[];
@@ -31,8 +35,9 @@ interface OSState {
   contextMenu: { x: number; y: number; visible: boolean; items: ContextMenuItem[] };
   dockApps: DockApp[];
 
-  login: (username: string) => void;
-  logout: () => void;
+  initAuth: () => Promise<void>;
+  login: (email: string, password: string) => Promise<{ error?: string }>;
+  logout: () => Promise<void>;
   setWallpaper: (wp: string) => void;
   setAccentColor: (color: string) => void;
 
@@ -62,9 +67,31 @@ const defaultDockApps: DockApp[] = [
   { id: 'fabric', name: 'Fabric Network', icon: '🔗' },
 ];
 
+async function checkAdmin(userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', userId)
+    .eq('role', 'admin')
+    .maybeSingle();
+  return !!data;
+}
+
+async function getProfile(userId: string) {
+  const { data } = await supabase
+    .from('profiles')
+    .select('username')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return data;
+}
+
 export const useOSStore = create<OSState>((set, get) => ({
   isLoggedIn: false,
   username: '',
+  userId: null,
+  isAdmin: false,
+  isLoading: true,
   wallpaper: 'default',
   accentColor: 'orange',
   windows: [],
@@ -73,8 +100,61 @@ export const useOSStore = create<OSState>((set, get) => ({
   contextMenu: { x: 0, y: 0, visible: false, items: [] },
   dockApps: defaultDockApps,
 
-  login: (username) => set({ isLoggedIn: true, username }),
-  logout: () => set({ isLoggedIn: false, username: '', windows: [], focusedWindowId: null, nextZIndex: 10 }),
+  initAuth: async () => {
+    // Set up listener first
+    supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        const profile = await getProfile(session.user.id);
+        const admin = await checkAdmin(session.user.id);
+        set({
+          isLoggedIn: true,
+          username: profile?.username || session.user.email || '',
+          userId: session.user.id,
+          isAdmin: admin,
+          isLoading: false,
+        });
+      } else {
+        set({
+          isLoggedIn: false,
+          username: '',
+          userId: null,
+          isAdmin: false,
+          windows: [],
+          focusedWindowId: null,
+          nextZIndex: 10,
+          isLoading: false,
+        });
+      }
+    });
+
+    // Then check existing session
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      const profile = await getProfile(session.user.id);
+      const admin = await checkAdmin(session.user.id);
+      set({
+        isLoggedIn: true,
+        username: profile?.username || session.user.email || '',
+        userId: session.user.id,
+        isAdmin: admin,
+        isLoading: false,
+      });
+    } else {
+      set({ isLoading: false });
+    }
+  },
+
+  login: async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message };
+    return {};
+  },
+
+  logout: async () => {
+    await supabase.auth.signOut();
+    set({ isLoggedIn: false, username: '', userId: null, isAdmin: false, windows: [], focusedWindowId: null, nextZIndex: 10 });
+  },
+
   setWallpaper: (wp) => set({ wallpaper: wp }),
   setAccentColor: (color) => set({ accentColor: color }),
 
