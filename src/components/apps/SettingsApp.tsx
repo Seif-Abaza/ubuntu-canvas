@@ -20,19 +20,65 @@ const wallpapers = [
   { id: 'noble', label: 'Noble Numbat', color: 'linear-gradient(135deg, hsl(40,50%,10%) 0%, hsl(50,40%,20%) 100%)' },
 ];
 
-const mockUsers = [
-  { id: 1, name: 'admin', role: 'Administrator', active: true },
-  { id: 2, name: 'user1', role: 'Standard', active: true },
-  { id: 3, name: 'operator', role: 'Standard', active: false },
+interface UserData {
+  id: number;
+  username: string;
+  fullName: string;
+  phone: string;
+  email: string;
+  password: string;
+  nationalId: string;
+  role: string;
+  active: boolean;
+}
+
+const emptyUser: Omit<UserData, 'id'> = {
+  username: '', fullName: '', phone: '', email: '', password: '', nationalId: '', role: 'Standard', active: true,
+};
+
+const mockUsers: UserData[] = [
+  { id: 1, username: 'admin', fullName: 'System Administrator', phone: '+1234567890', email: 'admin@system.local', password: '••••••', nationalId: '1234567890', role: 'Administrator', active: true },
+  { id: 2, username: 'user1', fullName: 'John Doe', phone: '+1987654321', email: 'john@system.local', password: '••••••', nationalId: '0987654321', role: 'Standard', active: true },
+  { id: 3, username: 'operator', fullName: 'Jane Smith', phone: '', email: 'jane@system.local', password: '••••••', nationalId: '', role: 'Standard', active: false },
 ];
 
 const SettingsApp = () => {
   const [activeSection, setActiveSection] = useState('appearance');
   const { wallpaper, setWallpaper, accentColor, setAccentColor } = useOSStore();
-  const [users, setUsers] = useState(mockUsers);
+  const [users, setUsers] = useState<UserData[]>(mockUsers);
   const [fontSize, setFontSize] = useState(100);
   const [highContrast, setHighContrast] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserData | null>(null);
+  const [isNewUser, setIsNewUser] = useState(false);
+
+  const handleAddUser = () => {
+    const newUser: UserData = { ...emptyUser, id: Date.now() };
+    setEditingUser(newUser);
+    setIsNewUser(true);
+  };
+
+  const handleEditUser = (user: UserData) => {
+    setEditingUser({ ...user });
+    setIsNewUser(false);
+  };
+
+  const handleSaveUser = () => {
+    if (!editingUser) return;
+    if (!editingUser.username.trim()) return;
+    if (isNewUser) {
+      setUsers([...users, editingUser]);
+    } else {
+      setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
+    }
+    setEditingUser(null);
+    setIsNewUser(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingUser(null);
+    setIsNewUser(false);
+  };
 
   const renderContent = () => {
     switch (activeSection) {
