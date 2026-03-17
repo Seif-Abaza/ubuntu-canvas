@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useOSStore } from '@/store/os-store';
+import { wallpaperImages } from '@/components/os/Desktop';
 
 const settingsSections = [
   { id: 'appearance', label: 'Appearance', icon: '🎨' },
