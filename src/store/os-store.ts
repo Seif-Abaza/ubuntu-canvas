@@ -143,8 +143,13 @@ export const useOSStore = create<OSState>((set, get) => ({
         }
       });
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
+      // Race getSession against a timeout to prevent infinite loading
+      const sessionPromise = supabase.auth.getSession();
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+      const result = await Promise.race([sessionPromise, timeoutPromise]);
+      
+      if (result && 'data' in result && result.data.session?.user) {
+        const session = result.data.session;
         const profile = await getProfile(session.user.id);
         const admin = await checkAdmin(session.user.id);
         set({
