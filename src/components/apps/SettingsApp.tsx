@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 const settingsSections = [
   { id: 'appearance', label: 'Appearance', icon: '🎨' },
   { id: 'background', label: 'Background', icon: '🖼️' },
+  { id: 'dock', label: 'Dock', icon: '🔲' },
   { id: 'accessibility', label: 'Accessibility', icon: '♿' },
   { id: 'users', label: 'Users', icon: '👥' },
   { id: 'network', label: 'Network', icon: '📶' },
