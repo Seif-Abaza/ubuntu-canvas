@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { useOSStore } from '@/store/os-store';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const Dock = () => {
   const dockApps = useOSStore(s => s.dockApps);
   const windows = useOSStore(s => s.windows);
   const openWindow = useOSStore(s => s.openWindow);
   const focusWindow = useOSStore(s => s.focusWindow);
+  const dockAutoHide = useOSStore(s => s.dockAutoHide);
+  const [hovered, setHovered] = useState(false);
 
   const handleClick = (app: typeof dockApps[0]) => {
     const existing = windows.find(w => w.appId === app.id);
@@ -18,24 +21,48 @@ const Dock = () => {
 
   const isOpen = (appId: string) => windows.some(w => w.appId === appId && !w.minimized);
 
+  const visible = !dockAutoHide || hovered;
+
   return (
-    <div className="fixed left-0 top-7 bottom-0 w-[72px] z-[999] flex flex-col items-center py-2 gap-1 glass-surface rounded-r-xl" style={{ background: 'hsla(0,0%,100%,0.08)' }}>
-      {dockApps.map(app => (
-        <motion.button
-          key={app.id}
-          whileHover={{ scale: 1.15 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => handleClick(app)}
-          className="relative w-12 h-12 rounded-window-inner flex items-center justify-center text-2xl hover:bg-secondary/50 transition-colors"
-          title={app.name}
-        >
-          {app.icon}
-          {isOpen(app.id) && (
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-2 rounded-r-full bg-primary" />
-          )}
-        </motion.button>
-      ))}
-    </div>
+    <>
+      {/* Hover trigger zone when auto-hidden */}
+      {dockAutoHide && (
+        <div
+          className="fixed left-0 top-7 bottom-0 w-3 z-[998]"
+          onMouseEnter={() => setHovered(true)}
+        />
+      )}
+      <AnimatePresence>
+        {visible && (
+          <motion.div
+            initial={dockAutoHide ? { x: -72 } : false}
+            animate={{ x: 0 }}
+            exit={{ x: -72 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+            className="fixed left-0 top-7 bottom-0 w-[72px] z-[999] flex flex-col items-center py-2 gap-1 glass-surface rounded-r-xl"
+            style={{ background: 'hsla(0,0%,100%,0.08)' }}
+          >
+            {dockApps.map(app => (
+              <motion.button
+                key={app.id}
+                whileHover={{ scale: 1.15 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => handleClick(app)}
+                className="relative w-12 h-12 rounded-window-inner flex items-center justify-center text-2xl hover:bg-secondary/50 transition-colors"
+                title={app.name}
+              >
+                {app.icon}
+                {isOpen(app.id) && (
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-2 rounded-r-full bg-primary" />
+                )}
+              </motion.button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 };
 
