@@ -123,8 +123,33 @@ export const useOSStore = create<OSState>((set, get) => ({
   desktopItems: [],
 
   initAuth: async () => {
-    supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
+    try {
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+          const profile = await getProfile(session.user.id);
+          const admin = await checkAdmin(session.user.id);
+          set({
+            isLoggedIn: true,
+            username: profile?.username || session.user.email || '',
+            userId: session.user.id,
+            isAdmin: admin,
+            isLoading: false,
+          });
+        } else {
+          set({
+            isLoggedIn: false, username: '', userId: null, isAdmin: false,
+            windows: [], focusedWindowId: null, nextZIndex: 10, isLoading: false,
+          });
+        }
+      });
+
+      // Race getSession against a timeout to prevent infinite loading
+      const sessionPromise = supabase.auth.getSession();
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+      const result = await Promise.race([sessionPromise, timeoutPromise]);
+      
+      if (result && 'data' in result && result.data.session?.user) {
+        const session = result.data.session;
         const profile = await getProfile(session.user.id);
         const admin = await checkAdmin(session.user.id);
         set({
@@ -135,25 +160,10 @@ export const useOSStore = create<OSState>((set, get) => ({
           isLoading: false,
         });
       } else {
-        set({
-          isLoggedIn: false, username: '', userId: null, isAdmin: false,
-          windows: [], focusedWindowId: null, nextZIndex: 10, isLoading: false,
-        });
+        set({ isLoading: false });
       }
-    });
-
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      const profile = await getProfile(session.user.id);
-      const admin = await checkAdmin(session.user.id);
-      set({
-        isLoggedIn: true,
-        username: profile?.username || session.user.email || '',
-        userId: session.user.id,
-        isAdmin: admin,
-        isLoading: false,
-      });
-    } else {
+    } catch (err) {
+      console.error('initAuth error:', err);
       set({ isLoading: false });
     }
   },
