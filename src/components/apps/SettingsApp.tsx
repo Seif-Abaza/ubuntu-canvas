@@ -40,7 +40,7 @@ const emptyUser: UserData = {
 
 const SettingsApp = () => {
   const [activeSection, setActiveSection] = useState('appearance');
-  const { wallpaper, setWallpaper, accentColor, setAccentColor, isAdmin } = useOSStore();
+  const { wallpaper, setWallpaper, accentColor, setAccentColor, isAdmin, dockAutoHide, setDockAutoHide } = useOSStore();
   const [users, setUsers] = useState<UserData[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [userError, setUserError] = useState('');
