@@ -123,7 +123,27 @@ export const useOSStore = create<OSState>((set, get) => ({
   desktopItems: [],
 
   initAuth: async () => {
-    supabase.auth.onAuthStateChange(async (event, session) => {
+    try {
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+          const profile = await getProfile(session.user.id);
+          const admin = await checkAdmin(session.user.id);
+          set({
+            isLoggedIn: true,
+            username: profile?.username || session.user.email || '',
+            userId: session.user.id,
+            isAdmin: admin,
+            isLoading: false,
+          });
+        } else {
+          set({
+            isLoggedIn: false, username: '', userId: null, isAdmin: false,
+            windows: [], focusedWindowId: null, nextZIndex: 10, isLoading: false,
+          });
+        }
+      });
+
+      const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         const profile = await getProfile(session.user.id);
         const admin = await checkAdmin(session.user.id);
@@ -135,25 +155,10 @@ export const useOSStore = create<OSState>((set, get) => ({
           isLoading: false,
         });
       } else {
-        set({
-          isLoggedIn: false, username: '', userId: null, isAdmin: false,
-          windows: [], focusedWindowId: null, nextZIndex: 10, isLoading: false,
-        });
+        set({ isLoading: false });
       }
-    });
-
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      const profile = await getProfile(session.user.id);
-      const admin = await checkAdmin(session.user.id);
-      set({
-        isLoggedIn: true,
-        username: profile?.username || session.user.email || '',
-        userId: session.user.id,
-        isAdmin: admin,
-        isLoading: false,
-      });
-    } else {
+    } catch (err) {
+      console.error('initAuth error:', err);
       set({ isLoading: false });
     }
   },
