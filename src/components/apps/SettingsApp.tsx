@@ -205,7 +205,33 @@ const SettingsApp = () => {
           </div>
         );
 
-      case 'accessibility':
+      case 'dock':
+        return (
+          <div className="p-6 space-y-6">
+            <h2 className="text-lg font-medium text-foreground">Dock</h2>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-window-inner bg-secondary">
+                <div>
+                  <span className="text-sm text-foreground">Auto-hide the Dock</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">The dock hides when not in use and appears on hover</p>
+                </div>
+                <button onClick={() => setDockAutoHide(!dockAutoHide)} className={`w-10 h-5 rounded-full transition-colors ${dockAutoHide ? 'bg-primary' : 'bg-muted'}`}>
+                  <div className={`w-4 h-4 rounded-full bg-foreground transition-transform ${dockAutoHide ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-window-inner bg-secondary">
+                <span className="text-sm text-foreground">Icon Size</span>
+                <span className="text-xs text-muted-foreground">48px</span>
+              </div>
+              <div className="flex items-center justify-between p-3 rounded-window-inner bg-secondary">
+                <span className="text-sm text-foreground">Position</span>
+                <span className="text-xs text-muted-foreground">Left</span>
+              </div>
+            </div>
+          </div>
+        );
+
+
         return (
           <div className="p-6 space-y-6">
             <h2 className="text-lg font-medium text-foreground">Accessibility</h2>
