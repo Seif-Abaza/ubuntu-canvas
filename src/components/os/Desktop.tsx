@@ -3,11 +3,13 @@ import TopBar from './TopBar';
 import Dock from './Dock';
 import WindowFrame from './WindowFrame';
 import ContextMenu from './ContextMenu';
+import DesktopIcons from './DesktopIcons';
 import SettingsApp from '@/components/apps/SettingsApp';
 import FileExplorer from '@/components/apps/FileExplorer';
 import TerminalApp from '@/components/apps/TerminalApp';
 import IPFSExplorer from '@/components/apps/IPFSExplorer';
 import FabricNetwork from '@/components/apps/FabricNetwork';
+import TextEditor from '@/components/apps/TextEditor';
 import { AnimatePresence } from 'framer-motion';
 
 import wpDefault from '@/assets/wallpaper-default.jpg';
@@ -26,22 +28,62 @@ export const wallpaperImages: Record<string, string> = {
   noble: wpNoble,
 };
 
-const appContent: Record<string, React.ReactNode> = {
-  files: <FileExplorer />,
-  terminal: <TerminalApp />,
-  settings: <SettingsApp />,
-  ipfs: <IPFSExplorer />,
-  fabric: <FabricNetwork />,
+const getAppContent = (win: ReturnType<typeof useOSStore.getState>['windows'][0]) => {
+  switch (win.appId) {
+    case 'files':
+      return <FileExplorer folderId={win.appData?.folderId} folderName={win.appData?.folderName} />;
+    case 'terminal':
+      return <TerminalApp />;
+    case 'settings':
+      return <SettingsApp />;
+    case 'ipfs':
+      return <IPFSExplorer />;
+    case 'fabric':
+      return <FabricNetwork />;
+    case 'texteditor':
+      return <TextEditor windowId={win.id} noteId={win.appData?.noteId} initialContent={win.appData?.content || ''} fileName={win.appData?.fileName || 'Untitled'} />;
+    default:
+      return (
+        <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+          Application not found
+        </div>
+      );
+  }
 };
 
 const Desktop = () => {
-  const { windows, wallpaper, showContextMenu, logout } = useOSStore();
+  const { windows, wallpaper, showContextMenu, logout, addDesktopItem } = useOSStore();
+
+  const createNewFolder = () => {
+    const id = `folder-${Date.now()}`;
+    addDesktopItem({
+      id, name: 'New Folder', type: 'folder',
+      children: [],
+      x: 0, y: 0,
+    });
+  };
+
+  const createNewNote = () => {
+    const id = `note-${Date.now()}`;
+    const item = {
+      id, name: 'Untitled Note.txt', type: 'note' as const,
+      content: '',
+      x: 0, y: 0,
+    };
+    addDesktopItem(item);
+    useOSStore.getState().openWindow('texteditor', item.name, '📝', { noteId: id, content: '', fileName: item.name });
+  };
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     showContextMenu(e.clientX, e.clientY, [
-      { label: 'New Folder', action: () => {} },
+      { label: 'New Folder', action: createNewFolder },
+      { label: 'New Notes', action: createNewNote },
+      { separator: true, label: '' },
+      { label: 'Paste', action: () => {} },
+      { separator: true, label: '' },
       { label: 'Change Background', action: () => useOSStore.getState().openWindow('settings', 'Settings', '⚙️') },
+      { label: 'Display Settings', action: () => useOSStore.getState().openWindow('settings', 'Settings', '⚙️') },
       { separator: true, label: '' },
       { label: 'Open Terminal', action: () => useOSStore.getState().openWindow('terminal', 'Terminal', '🖥️') },
       { separator: true, label: '' },
@@ -58,15 +100,12 @@ const Desktop = () => {
     >
       <TopBar />
       <Dock />
+      <DesktopIcons />
 
       <AnimatePresence>
         {windows.map(win => (
           <WindowFrame key={win.id} win={win}>
-            {appContent[win.appId] || (
-              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                Application not found
-              </div>
-            )}
+            {getAppContent(win)}
           </WindowFrame>
         ))}
       </AnimatePresence>
