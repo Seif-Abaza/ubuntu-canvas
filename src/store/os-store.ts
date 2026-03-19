@@ -137,6 +137,8 @@ export const useOSStore = create<OSState>((set, get) => ({
             isAdmin: admin,
             isLoading: false,
           });
+          // Load desktop items after auth state is set
+          get().loadDesktopItems();
         } else {
           set({
             isLoggedIn: false, username: '', userId: null, isAdmin: false,
