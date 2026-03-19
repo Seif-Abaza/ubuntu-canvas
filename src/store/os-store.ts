@@ -73,6 +73,7 @@ interface OSState {
   removeDesktopItem: (id: string) => void;
   renameDesktopItem: (id: string, name: string) => void;
   updateDesktopItemContent: (id: string, content: string) => void;
+  moveDesktopItem: (id: string, x: number, y: number) => void;
 
   showContextMenu: (x: number, y: number, items: ContextMenuItem[]) => void;
   hideContextMenu: () => void;
