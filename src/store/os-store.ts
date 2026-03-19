@@ -163,6 +163,7 @@ export const useOSStore = create<OSState>((set, get) => ({
           isAdmin: admin,
           isLoading: false,
         });
+        get().loadDesktopItems();
       } else {
         set({ isLoading: false });
       }
