@@ -251,10 +251,20 @@ export const useOSStore = create<OSState>((set, get) => ({
     set({ windows: windows.map(win => win.id === id ? { ...win, width: w, height: h } : win) });
   },
 
-  addDesktopItem: (item) => set({ desktopItems: [...get().desktopItems, item] }),
+  addDesktopItem: (item) => {
+    // Auto-assign grid position if x/y are 0
+    if (item.x === 0 && item.y === 0) {
+      const items = get().desktopItems;
+      const col = Math.floor(items.length / 8);
+      const row = items.length % 8;
+      item = { ...item, x: 80 + col * 100, y: 36 + row * 94 };
+    }
+    set({ desktopItems: [...get().desktopItems, item] });
+  },
   removeDesktopItem: (id) => set({ desktopItems: get().desktopItems.filter(i => i.id !== id) }),
   renameDesktopItem: (id, name) => set({ desktopItems: get().desktopItems.map(i => i.id === id ? { ...i, name } : i) }),
   updateDesktopItemContent: (id, content) => set({ desktopItems: get().desktopItems.map(i => i.id === id ? { ...i, content } : i) }),
+  moveDesktopItem: (id, x, y) => set({ desktopItems: get().desktopItems.map(i => i.id === id ? { ...i, x, y } : i) }),
 
   showContextMenu: (x, y, items) => set({ contextMenu: { x, y, visible: true, items } }),
   hideContextMenu: () => set({ contextMenu: { ...get().contextMenu, visible: false } }),
