@@ -69,11 +69,12 @@ interface OSState {
   moveWindow: (id: string, x: number, y: number) => void;
   resizeWindow: (id: string, w: number, h: number) => void;
 
-  addDesktopItem: (item: DesktopItem) => void;
-  removeDesktopItem: (id: string) => void;
-  renameDesktopItem: (id: string, name: string) => void;
-  updateDesktopItemContent: (id: string, content: string) => void;
-  moveDesktopItem: (id: string, x: number, y: number) => void;
+  loadDesktopItems: () => Promise<void>;
+  addDesktopItem: (item: DesktopItem) => Promise<void>;
+  removeDesktopItem: (id: string) => Promise<void>;
+  renameDesktopItem: (id: string, name: string) => Promise<void>;
+  updateDesktopItemContent: (id: string, content: string) => Promise<void>;
+  moveDesktopItem: (id: string, x: number, y: number) => Promise<void>;
 
   showContextMenu: (x: number, y: number, items: ContextMenuItem[]) => void;
   hideContextMenu: () => void;
@@ -136,6 +137,8 @@ export const useOSStore = create<OSState>((set, get) => ({
             isAdmin: admin,
             isLoading: false,
           });
+          // Load desktop items after auth state is set
+          get().loadDesktopItems();
         } else {
           set({
             isLoggedIn: false, username: '', userId: null, isAdmin: false,
@@ -160,6 +163,7 @@ export const useOSStore = create<OSState>((set, get) => ({
           isAdmin: admin,
           isLoading: false,
         });
+        get().loadDesktopItems();
       } else {
         set({ isLoading: false });
       }
@@ -251,20 +255,70 @@ export const useOSStore = create<OSState>((set, get) => ({
     set({ windows: windows.map(win => win.id === id ? { ...win, width: w, height: h } : win) });
   },
 
-  addDesktopItem: (item) => {
-    // Auto-assign grid position if x/y are 0
-    if (item.x === 0 && item.y === 0) {
-      const items = get().desktopItems;
+  loadDesktopItems: async () => {
+    const userId = get().userId;
+    if (!userId) return;
+    const { data } = await supabase
+      .from('desktop_items')
+      .select('*')
+      .eq('user_id', userId);
+    if (data) {
+      set({
+        desktopItems: data.map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          type: d.type as 'folder' | 'note',
+          content: d.content || '',
+          x: d.x,
+          y: d.y,
+        })),
+      });
+    }
+  },
+
+  addDesktopItem: async (item) => {
+    const userId = get().userId;
+    if (!userId) return;
+    const items = get().desktopItems;
+    let x = item.x, y = item.y;
+    if (x === 0 && y === 0) {
       const col = Math.floor(items.length / 8);
       const row = items.length % 8;
-      item = { ...item, x: 80 + col * 100, y: 36 + row * 94 };
+      x = 80 + col * 100;
+      y = 36 + row * 94;
     }
-    set({ desktopItems: [...get().desktopItems, item] });
+    const { data } = await supabase
+      .from('desktop_items')
+      .insert({ user_id: userId, name: item.name, type: item.type, content: item.content || '', x, y })
+      .select()
+      .single();
+    if (data) {
+      set({
+        desktopItems: [...get().desktopItems, { id: data.id, name: data.name, type: data.type as 'folder' | 'note', content: data.content || '', x: data.x, y: data.y }],
+      });
+    }
   },
-  removeDesktopItem: (id) => set({ desktopItems: get().desktopItems.filter(i => i.id !== id) }),
-  renameDesktopItem: (id, name) => set({ desktopItems: get().desktopItems.map(i => i.id === id ? { ...i, name } : i) }),
-  updateDesktopItemContent: (id, content) => set({ desktopItems: get().desktopItems.map(i => i.id === id ? { ...i, content } : i) }),
-  moveDesktopItem: (id, x, y) => set({ desktopItems: get().desktopItems.map(i => i.id === id ? { ...i, x, y } : i) }),
+
+  removeDesktopItem: async (id) => {
+    await supabase.from('desktop_items').delete().eq('id', id);
+    set({ desktopItems: get().desktopItems.filter(i => i.id !== id) });
+  },
+
+  renameDesktopItem: async (id, name) => {
+    await supabase.from('desktop_items').update({ name }).eq('id', id);
+    set({ desktopItems: get().desktopItems.map(i => i.id === id ? { ...i, name } : i) });
+  },
+
+  updateDesktopItemContent: async (id, content) => {
+    await supabase.from('desktop_items').update({ content }).eq('id', id);
+    set({ desktopItems: get().desktopItems.map(i => i.id === id ? { ...i, content } : i) });
+  },
+
+  moveDesktopItem: async (id, x, y) => {
+    // Update locally immediately for responsiveness
+    set({ desktopItems: get().desktopItems.map(i => i.id === id ? { ...i, x, y } : i) });
+    await supabase.from('desktop_items').update({ x, y }).eq('id', id);
+  },
 
   showContextMenu: (x, y, items) => set({ contextMenu: { x, y, visible: true, items } }),
   hideContextMenu: () => set({ contextMenu: { ...get().contextMenu, visible: false } }),
