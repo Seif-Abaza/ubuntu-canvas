@@ -69,11 +69,12 @@ interface OSState {
   moveWindow: (id: string, x: number, y: number) => void;
   resizeWindow: (id: string, w: number, h: number) => void;
 
-  addDesktopItem: (item: DesktopItem) => void;
-  removeDesktopItem: (id: string) => void;
-  renameDesktopItem: (id: string, name: string) => void;
-  updateDesktopItemContent: (id: string, content: string) => void;
-  moveDesktopItem: (id: string, x: number, y: number) => void;
+  loadDesktopItems: () => Promise<void>;
+  addDesktopItem: (item: DesktopItem) => Promise<void>;
+  removeDesktopItem: (id: string) => Promise<void>;
+  renameDesktopItem: (id: string, name: string) => Promise<void>;
+  updateDesktopItemContent: (id: string, content: string) => Promise<void>;
+  moveDesktopItem: (id: string, x: number, y: number) => Promise<void>;
 
   showContextMenu: (x: number, y: number, items: ContextMenuItem[]) => void;
   hideContextMenu: () => void;
