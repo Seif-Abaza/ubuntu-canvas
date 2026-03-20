@@ -235,7 +235,15 @@ const SettingsApp = () => {
         );
 
 
+      case 'security':
         return (
+          <div className="p-6 space-y-6">
+            <h2 className="text-lg font-medium text-foreground">Security</h2>
+            <FaceRegister />
+          </div>
+        );
+
+      case 'accessibility':
           <div className="p-6 space-y-6">
             <h2 className="text-lg font-medium text-foreground">Accessibility</h2>
             <div className="space-y-4">
