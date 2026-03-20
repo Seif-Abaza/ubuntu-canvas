@@ -50,6 +50,30 @@ export type Database = {
         }
         Relationships: []
       }
+      face_descriptors: {
+        Row: {
+          created_at: string
+          descriptor: Json
+          id: string
+          label: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          descriptor: Json
+          id?: string
+          label?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          descriptor?: Json
+          id?: string
+          label?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           active: boolean | null
