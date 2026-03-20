@@ -88,6 +88,7 @@ const defaultDockApps: DockApp[] = [
   { id: 'fabric', name: 'Fabric Network', icon: '🔗' },
   { id: 'texteditor', name: 'Text Editor', icon: '📝' },
   { id: 'p2p', name: 'P2P Share', icon: '📡' },
+  { id: 'p2pgroup', name: 'P2P Group', icon: '🎥' },
 ];
 
 async function checkAdmin(userId: string): Promise<boolean> {

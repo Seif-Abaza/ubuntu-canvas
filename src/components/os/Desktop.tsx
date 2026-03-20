@@ -46,6 +46,8 @@ const getAppContent = (win: ReturnType<typeof useOSStore.getState>['windows'][0]
       return <TextEditor windowId={win.id} noteId={win.appData?.noteId} initialContent={win.appData?.content || ''} fileName={win.appData?.fileName || 'Untitled'} />;
     case 'p2p':
       return <P2PShareApp shareFile={win.appData?.shareFile} />;
+    case 'p2pgroup':
+      return <P2PGroupApp />;
     default:
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
