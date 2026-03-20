@@ -3,10 +3,13 @@ import { useOSStore } from '@/store/os-store';
 import { wallpaperImages } from '@/components/os/Desktop';
 import { supabase } from '@/integrations/supabase/client';
 
+import FaceRegister from '@/components/os/FaceRegister';
+
 const settingsSections = [
   { id: 'appearance', label: 'Appearance', icon: '🎨' },
   { id: 'background', label: 'Background', icon: '🖼️' },
   { id: 'dock', label: 'Dock', icon: '🔲' },
+  { id: 'security', label: 'Security', icon: '🔒' },
   { id: 'accessibility', label: 'Accessibility', icon: '♿' },
   { id: 'users', label: 'Users', icon: '👥' },
   { id: 'network', label: 'Network', icon: '📶' },
