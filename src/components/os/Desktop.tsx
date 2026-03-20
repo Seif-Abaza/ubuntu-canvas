@@ -10,6 +10,7 @@ import TerminalApp from '@/components/apps/TerminalApp';
 import IPFSExplorer from '@/components/apps/IPFSExplorer';
 import FabricNetwork from '@/components/apps/FabricNetwork';
 import TextEditor from '@/components/apps/TextEditor';
+import P2PShareApp from '@/components/apps/P2PShareApp';
 import { AnimatePresence } from 'framer-motion';
 
 import wpDefault from '@/assets/wallpaper-default.jpg';
