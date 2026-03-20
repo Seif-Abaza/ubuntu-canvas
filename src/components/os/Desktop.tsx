@@ -10,6 +10,7 @@ import TerminalApp from '@/components/apps/TerminalApp';
 import IPFSExplorer from '@/components/apps/IPFSExplorer';
 import FabricNetwork from '@/components/apps/FabricNetwork';
 import TextEditor from '@/components/apps/TextEditor';
+import P2PShareApp from '@/components/apps/P2PShareApp';
 import { AnimatePresence } from 'framer-motion';
 
 import wpDefault from '@/assets/wallpaper-default.jpg';
@@ -42,6 +43,8 @@ const getAppContent = (win: ReturnType<typeof useOSStore.getState>['windows'][0]
       return <FabricNetwork />;
     case 'texteditor':
       return <TextEditor windowId={win.id} noteId={win.appData?.noteId} initialContent={win.appData?.content || ''} fileName={win.appData?.fileName || 'Untitled'} />;
+    case 'p2p':
+      return <P2PShareApp shareFile={win.appData?.shareFile} />;
     default:
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">

@@ -87,6 +87,7 @@ const defaultDockApps: DockApp[] = [
   { id: 'ipfs', name: 'IPFS Explorer', icon: '🌐' },
   { id: 'fabric', name: 'Fabric Network', icon: '🔗' },
   { id: 'texteditor', name: 'Text Editor', icon: '📝' },
+  { id: 'p2p', name: 'P2P Share', icon: '📡' },
 ];
 
 async function checkAdmin(userId: string): Promise<boolean> {

@@ -47,6 +47,7 @@ const DesktopIcons = () => {
       { label: 'Sync to Network', action: () => {} },
       { label: 'Permissions', action: () => {} },
       { label: 'Share With...', action: () => {} },
+      { label: 'Share P2P', action: () => openWindow('p2p', 'P2P Share', '📡', { shareFile: { name: item.name, content: item.content || '' } }) },
       { separator: true, label: '' },
       { label: 'Compress...', action: () => {} },
       { label: 'Properties', action: () => {} },
@@ -65,6 +66,7 @@ const DesktopIcons = () => {
       { label: 'Sync to Network', action: () => {} },
       { label: 'Permissions', action: () => {} },
       { label: 'Share With...', action: () => {} },
+      { label: 'Share P2P', action: () => openWindow('p2p', 'P2P Share', '📡', { shareFile: { name: item.name, content: item.content || '' } }) },
       { separator: true, label: '' },
       { label: 'Move to Trash', action: () => removeDesktopItem(item.id) },
     ];
