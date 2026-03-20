@@ -43,6 +43,8 @@ const getAppContent = (win: ReturnType<typeof useOSStore.getState>['windows'][0]
       return <FabricNetwork />;
     case 'texteditor':
       return <TextEditor windowId={win.id} noteId={win.appData?.noteId} initialContent={win.appData?.content || ''} fileName={win.appData?.fileName || 'Untitled'} />;
+    case 'p2p':
+      return <P2PShareApp shareFile={win.appData?.shareFile} />;
     default:
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
