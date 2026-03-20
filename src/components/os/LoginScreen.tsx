@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useOSStore } from '@/store/os-store';
 import { motion } from 'framer-motion';
+import FaceLogin from './FaceLogin';
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
@@ -8,6 +9,7 @@ const LoginScreen = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPasswordField, setShowPasswordField] = useState(false);
+  const [showFaceLogin, setShowFaceLogin] = useState(false);
   const login = useOSStore(s => s.login);
 
   const handleLogin = async () => {
@@ -55,7 +57,12 @@ const LoginScreen = () => {
           👤
         </div>
 
-        {!showPasswordField ? (
+        {showFaceLogin ? (
+          <FaceLogin
+            onSuccess={() => {}}
+            onCancel={() => setShowFaceLogin(false)}
+          />
+        ) : !showPasswordField ? (
           <div className="flex flex-col items-center gap-3">
             <input
               type="email"
@@ -71,6 +78,12 @@ const LoginScreen = () => {
               className="w-64 h-10 rounded-window-inner bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
             >
               Next
+            </button>
+            <button
+              onClick={() => setShowFaceLogin(true)}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5 mt-2"
+            >
+              📷 Sign in with Face Recognition
             </button>
           </div>
         ) : (
