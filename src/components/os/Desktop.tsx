@@ -11,6 +11,7 @@ import IPFSExplorer from '@/components/apps/IPFSExplorer';
 import FabricNetwork from '@/components/apps/FabricNetwork';
 import TextEditor from '@/components/apps/TextEditor';
 import P2PShareApp from '@/components/apps/P2PShareApp';
+import P2PGroupApp from '@/components/apps/P2PGroupApp';
 import { AnimatePresence } from 'framer-motion';
 
 import wpDefault from '@/assets/wallpaper-default.jpg';
