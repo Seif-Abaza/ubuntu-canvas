@@ -17,6 +17,7 @@ const P2PShareApp = ({ shareFile }: P2PShareAppProps) => {
   const [joinCode, setJoinCode] = useState('');
   const [activeTab, setActiveTab] = useState<'discover' | 'room'>('discover');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOverPeerId, setDragOverPeerId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId || !username) return;
@@ -75,8 +76,25 @@ const P2PShareApp = ({ shareFile }: P2PShareAppProps) => {
     toast.success(`Joined room: ${joinCode.trim().toUpperCase()}`);
   };
 
-  const handleSendFile = useCallback(async (peerId: string) => {
+  const handleSendFile = useCallback(async (peerId: string, file?: File) => {
     if (!manager) return;
+
+    // If file is provided from drag-and-drop
+    if (file) {
+      const transferId = await manager.sendFile(peerId, file);
+      setTransfers(prev => [...prev, {
+        id: transferId,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        progress: 0,
+        status: 'transferring',
+        direction: 'send',
+        peerId,
+        peerName: peers.find(p => p.peerId === peerId)?.username || 'Peer',
+      }]);
+      return;
+    }
 
     // If shareFile is provided from context menu, create a File from content
     if (shareFile) {
@@ -198,7 +216,25 @@ const P2PShareApp = ({ shareFile }: P2PShareAppProps) => {
           ) : (
             <div className="space-y-1">
               {peers.map(peer => (
-                <div key={peer.peerId} className="flex items-center justify-between p-2 rounded-lg hover:bg-secondary/30 transition-colors">
+                <div
+                  key={peer.peerId}
+                  className={`flex items-center justify-between p-2 rounded-lg transition-colors ${
+                    dragOverPeerId === peer.peerId ? 'bg-primary/30 border border-primary' : 'hover:bg-secondary/30'
+                  }`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOverPeerId(peer.peerId);
+                  }}
+                  onDragLeave={() => setDragOverPeerId(null)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOverPeerId(null);
+                    const files = e.dataTransfer.files;
+                    if (files && files.length > 0) {
+                      handleSendFile(peer.peerId, files[0]);
+                    }
+                  }}
+                >
                   <div className="flex items-center gap-2">
                     <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-medium text-primary">
                       {peer.username.charAt(0).toUpperCase()}

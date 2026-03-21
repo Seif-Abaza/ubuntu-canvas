@@ -35,6 +35,8 @@ const P2PGroupApp = () => {
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
+  const [screenSharing, setScreenSharing] = useState(false);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const peerId = useRef(`gp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
@@ -191,8 +193,57 @@ const P2PGroupApp = () => {
     setVideoEnabled(!videoEnabled);
   };
 
+  const toggleScreenShare = async () => {
+    if (screenSharing) {
+      // Stop screen sharing
+      screenStream?.getTracks().forEach(track => track.stop());
+      setScreenStream(null);
+      setScreenSharing(false);
+      
+      // Re-add camera video track to all peer connections
+      const cameraVideoTrack = localStream?.getVideoTracks()[0];
+      if (cameraVideoTrack && localStream) {
+        peerConnections.current.forEach(pc => {
+          const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) {
+            sender.replaceTrack(cameraVideoTrack);
+          }
+        });
+      }
+    } else {
+      // Start screen sharing
+      try {
+        const screen = await navigator.mediaDevices.getDisplayMedia({ 
+          video: { cursor: 'always' },
+          audio: false 
+        });
+        
+        setScreenStream(screen);
+        setScreenSharing(true);
+        
+        const screenVideoTrack = screen.getVideoTracks()[0];
+        
+        // Replace video track in all peer connections with screen share
+        peerConnections.current.forEach(pc => {
+          const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) {
+            sender.replaceTrack(screenVideoTrack);
+          }
+        });
+        
+        // Listen for user stopping screen share via browser UI
+        screenVideoTrack.onended = () => {
+          toggleScreenShare();
+        };
+      } catch (err: any) {
+        console.error('Screen share error:', err);
+      }
+    }
+  };
+
   const leaveRoom = () => {
     localStream?.getTracks().forEach(t => t.stop());
+    screenStream?.getTracks().forEach(t => t.stop());
     peerConnections.current.forEach(pc => pc.close());
     peerConnections.current.clear();
     peerStreams.current.clear();
@@ -329,6 +380,13 @@ const P2PGroupApp = () => {
         </button>
         <button onClick={toggleVideo} className={`w-9 h-9 rounded-full flex items-center justify-center text-sm transition-colors ${videoEnabled ? 'bg-secondary/50 text-foreground hover:bg-secondary' : 'bg-destructive/20 text-destructive'}`} title={videoEnabled ? 'Stop Video' : 'Start Video'}>
           {videoEnabled ? '📹' : '📷'}
+        </button>
+        <button 
+          onClick={toggleScreenShare} 
+          className={`w-9 h-9 rounded-full flex items-center justify-center text-sm transition-colors ${screenSharing ? 'bg-primary/30 text-primary border border-primary' : 'bg-secondary/50 text-foreground hover:bg-secondary'}`} 
+          title={screenSharing ? 'Stop Screen Share' : 'Share Screen'}
+        >
+          🖥️
         </button>
         <button onClick={leaveRoom} className="w-9 h-9 rounded-full flex items-center justify-center text-sm bg-destructive text-destructive-foreground hover:bg-destructive/90 active:scale-[0.95] transition-all" title="Leave">
           📞

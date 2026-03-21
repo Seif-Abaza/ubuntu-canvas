@@ -12,6 +12,7 @@ import FabricNetwork from '@/components/apps/FabricNetwork';
 import TextEditor from '@/components/apps/TextEditor';
 import P2PShareApp from '@/components/apps/P2PShareApp';
 import P2PGroupApp from '@/components/apps/P2PGroupApp';
+import TrashApp from '@/components/apps/TrashApp';
 import { AnimatePresence } from 'framer-motion';
 
 import wpDefault from '@/assets/wallpaper-default.jpg';
@@ -48,6 +49,8 @@ const getAppContent = (win: ReturnType<typeof useOSStore.getState>['windows'][0]
       return <P2PShareApp shareFile={win.appData?.shareFile} />;
     case 'p2pgroup':
       return <P2PGroupApp />;
+    case 'trash':
+      return <TrashApp />;
     default:
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">

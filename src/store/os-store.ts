@@ -30,6 +30,11 @@ export interface DesktopItem {
   children?: DesktopItem[]; // for folders
   x: number;
   y: number;
+  deletedAt?: number; // timestamp when moved to trash, undefined if not deleted
+}
+
+export interface TrashItem extends DesktopItem {
+  deletedAt: number;
 }
 
 export interface ContextMenuItem {
@@ -53,6 +58,7 @@ interface OSState {
   dockApps: DockApp[];
   dockAutoHide: boolean;
   desktopItems: DesktopItem[];
+  trashItems: TrashItem[];
 
   initAuth: () => Promise<void>;
   login: (email: string, password: string) => Promise<{ error?: string }>;
@@ -72,6 +78,10 @@ interface OSState {
   loadDesktopItems: () => Promise<void>;
   addDesktopItem: (item: DesktopItem) => Promise<void>;
   removeDesktopItem: (id: string) => Promise<void>;
+  moveToTrash: (id: string) => Promise<void>;
+  restoreFromTrash: (id: string) => Promise<void>;
+  permanentDelete: (id: string) => Promise<void>;
+  emptyTrash: () => Promise<void>;
   renameDesktopItem: (id: string, name: string) => Promise<void>;
   updateDesktopItemContent: (id: string, content: string) => Promise<void>;
   moveDesktopItem: (id: string, x: number, y: number) => Promise<void>;
@@ -89,6 +99,7 @@ const defaultDockApps: DockApp[] = [
   { id: 'texteditor', name: 'Text Editor', icon: '📝' },
   { id: 'p2p', name: 'P2P Share', icon: '📡' },
   { id: 'p2pgroup', name: 'P2P Group', icon: '🎥' },
+  { id: 'trash', name: 'Trash', icon: '🗑️' },
 ];
 
 async function checkAdmin(userId: string): Promise<boolean> {
@@ -125,6 +136,7 @@ export const useOSStore = create<OSState>((set, get) => ({
   dockApps: defaultDockApps,
   dockAutoHide: false,
   desktopItems: [],
+  trashItems: [],
 
   initAuth: async () => {
     try {
@@ -276,6 +288,10 @@ export const useOSStore = create<OSState>((set, get) => ({
         })),
       });
     }
+    // Load trash items from localStorage
+    const trashKey = `trash_${userId}`;
+    const trashItems = JSON.parse(localStorage.getItem(trashKey) || '[]');
+    set({ trashItems });
   },
 
   addDesktopItem: async (item) => {
@@ -304,6 +320,71 @@ export const useOSStore = create<OSState>((set, get) => ({
   removeDesktopItem: async (id) => {
     await supabase.from('desktop_items').delete().eq('id', id);
     set({ desktopItems: get().desktopItems.filter(i => i.id !== id) });
+  },
+
+  moveToTrash: async (id) => {
+    const item = get().desktopItems.find(i => i.id === id);
+    if (!item) return;
+    // Add to trash with timestamp
+    const trashItem: TrashItem = { ...item, deletedAt: Date.now() };
+    set({ 
+      desktopItems: get().desktopItems.filter(i => i.id !== id),
+      trashItems: [...get().trashItems, trashItem]
+    });
+    // Store in localStorage for persistence (simple approach)
+    const trashKey = `trash_${get().userId}`;
+    const existingTrash = JSON.parse(localStorage.getItem(trashKey) || '[]');
+    localStorage.setItem(trashKey, JSON.stringify([...existingTrash, trashItem]));
+  },
+
+  restoreFromTrash: async (id) => {
+    const trashItems = get().trashItems;
+    const item = trashItems.find(t => t.id === id);
+    if (!item) return;
+    // Restore to desktop
+    const userId = get().userId;
+    if (!userId) return;
+    const { data } = await supabase
+      .from('desktop_items')
+      .insert({ user_id: userId, name: item.name, type: item.type, content: item.content || '', x: item.x, y: item.y })
+      .select()
+      .single();
+    if (data) {
+      set({
+        desktopItems: [...get().desktopItems, { id: data.id, name: data.name, type: data.type as 'folder' | 'note', content: data.content || '', x: data.x, y: data.y }],
+        trashItems: trashItems.filter(t => t.id !== id)
+      });
+      // Update localStorage
+      const trashKey = `trash_${userId}`;
+      const existingTrash = JSON.parse(localStorage.getItem(trashKey) || '[]');
+      localStorage.setItem(trashKey, JSON.stringify(existingTrash.filter((t: any) => t.id !== id)));
+    }
+  },
+
+  permanentDelete: async (id) => {
+    const userId = get().userId;
+    if (!userId) return;
+    // Remove from database
+    await supabase.from('desktop_items').delete().eq('id', id);
+    // Remove from trash
+    set({ trashItems: get().trashItems.filter(t => t.id !== id) });
+    // Update localStorage
+    const trashKey = `trash_${userId}`;
+    const existingTrash = JSON.parse(localStorage.getItem(trashKey) || '[]');
+    localStorage.setItem(trashKey, JSON.stringify(existingTrash.filter((t: any) => t.id !== id)));
+  },
+
+  emptyTrash: async () => {
+    const userId = get().userId;
+    if (!userId) return;
+    const trashItems = get().trashItems;
+    // Delete all from database
+    const ids = trashItems.map(t => t.id);
+    if (ids.length > 0) {
+      await supabase.from('desktop_items').delete().in('id', ids);
+    }
+    set({ trashItems: [] });
+    localStorage.removeItem(`trash_${userId}`);
   },
 
   renameDesktopItem: async (id, name) => {

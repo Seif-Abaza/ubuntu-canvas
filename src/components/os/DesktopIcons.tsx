@@ -11,7 +11,7 @@ const GRID_ROW_GAP = ICON_H + 4;
 const DesktopIcons = () => {
   const desktopItems = useOSStore(s => s.desktopItems);
   const showContextMenu = useOSStore(s => s.showContextMenu);
-  const removeDesktopItem = useOSStore(s => s.removeDesktopItem);
+  const moveToTrash = useOSStore(s => s.moveToTrash);
   const renameDesktopItem = useOSStore(s => s.renameDesktopItem);
   const moveDesktopItem = useOSStore(s => s.moveDesktopItem);
   const openWindow = useOSStore(s => s.openWindow);
@@ -52,7 +52,7 @@ const DesktopIcons = () => {
       { label: 'Compress...', action: () => {} },
       { label: 'Properties', action: () => {} },
       { separator: true, label: '' },
-      { label: 'Move to Trash', action: () => removeDesktopItem(item.id) },
+      { label: 'Move to Trash', action: () => moveToTrash(item.id) },
     ];
 
     const noteItems = [
@@ -68,7 +68,7 @@ const DesktopIcons = () => {
       { label: 'Share With...', action: () => {} },
       { label: 'Share P2P', action: () => openWindow('p2p', 'P2P Share', '📡', { shareFile: { name: item.name, content: item.content || '' } }) },
       { separator: true, label: '' },
-      { label: 'Move to Trash', action: () => removeDesktopItem(item.id) },
+      { label: 'Move to Trash', action: () => moveToTrash(item.id) },
     ];
 
     showContextMenu(e.clientX, e.clientY, item.type === 'folder' ? folderItems : noteItems);
