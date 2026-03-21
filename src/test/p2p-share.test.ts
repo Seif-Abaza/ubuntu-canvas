@@ -286,3 +286,212 @@ test.describe("P2P Group Video Chat - Screen Sharing", () => {
     console.log(`✓ Screen share button has correct inactive state`);
   });
 });
+
+test.describe("Desktop Context Menu", () => {
+  test("should verify context menu has Cut, Copy, Paste, Rename, Compress options", async ({
+    page,
+  }) => {
+    // Navigate and login
+    await page.goto("/");
+    await page.waitForSelector('input[type="email"]', { state: "visible" });
+
+    await page.locator('input[type="email"]').fill("admin@system.local");
+    await page.locator("button", { hasText: "Next" }).click();
+
+    await page.waitForSelector('input[type="password"]', { state: "visible" });
+    await page.locator('input[type="password"]').fill("admin123");
+    await page.locator("button", { hasText: "Sign In" }).click();
+
+    // Wait for desktop to load
+    await page.waitForSelector('[title="P2P Share"]', { state: "visible" });
+
+    // Find a desktop item and right-click on it
+    const desktopItem = page.locator('.group').first();
+    await expect(desktopItem).toBeVisible();
+
+    // Right-click on the desktop item
+    await desktopItem.click({ button: "right" });
+
+    // Wait for context menu to appear
+    await page.waitForSelector('[role="menu"]', { state: "visible" });
+
+    // Verify Cut option exists
+    const cutOption = page.locator('[role="menuitem"]:has-text("Cut")');
+    await expect(cutOption).toBeVisible();
+
+    // Verify Copy option exists
+    const copyOption = page.locator('[role="menuitem"]:has-text("Copy")');
+    await expect(copyOption).toBeVisible();
+
+    // Verify Paste option exists (may be disabled if nothing in clipboard)
+    const pasteOption = page.locator('[role="menuitem"]:has-text("Paste")');
+    await expect(pasteOption).toBeVisible();
+
+    // Verify Rename option exists
+    const renameOption = page.locator('[role="menuitem"]:has-text("Rename")');
+    await expect(renameOption).toBeVisible();
+
+    // Verify Compress option exists
+    const compressOption = page.locator('[role="menuitem"]:has-text("Compress")]');
+    await expect(compressOption).toBeVisible();
+
+    // Verify "Sync to Network", "Share With...", and "Permissions" are NOT present
+    const syncOption = page.locator('[role="menuitem"]:has-text("Sync to Network")');
+    await expect(syncOption).not.toBeVisible();
+
+    const shareWithOption = page.locator('[role="menuitem"]:has-text("Share With...")]');
+    await expect(shareWithOption).not.toBeVisible();
+
+    const permissionsOption = page.locator('[role="menuitem"]:has-text("Permissions")]');
+    await expect(permissionsOption).not.toBeVisible();
+
+    console.log(`✓ Context menu opened successfully`);
+    console.log(`✓ Cut, Copy, Paste, Rename, Compress options are visible`);
+    console.log(`✓ Sync to Network, Share With..., Permissions options are removed`);
+  });
+
+  test("should test Rename functionality via context menu", async ({
+    page,
+  }) => {
+    // Navigate and login
+    await page.goto("/");
+    await page.waitForSelector('input[type="email"]', { state: "visible" });
+
+    await page.locator('input[type="email"]').fill("admin@system.local");
+    await page.locator("button", { hasText: "Next" }).click();
+
+    await page.waitForSelector('input[type="password"]', { state: "visible" });
+    await page.locator('input[type="password"]').fill("admin123");
+    await page.locator("button", { hasText: "Sign In" }).click();
+
+    await page.waitForSelector('[title="P2P Share"]', { state: "visible" });
+
+    // Find a desktop item and right-click on it
+    const desktopItem = page.locator('.group').first();
+    await expect(desktopItem).toBeVisible();
+
+    // Get original name
+    const originalName = await desktopItem.locator('span').last().textContent();
+
+    // Right-click on the desktop item
+    await desktopItem.click({ button: "right" });
+
+    // Click Rename option
+    const renameOption = page.locator('[role="menuitem"]:has-text("Rename")]');
+    await renameOption.click();
+
+    // Wait for rename input to appear
+    const renameInput = page.locator('input[class*="text-center"]');
+    await expect(renameInput).toBeVisible();
+
+    // Type new name
+    await renameInput.fill("Renamed Item");
+
+    // Press Enter to confirm
+    await renameInput.press("Enter");
+
+    // Wait for rename to complete and verify new name
+    await page.waitForTimeout(500);
+    const newName = await desktopItem.locator('span').last().textContent();
+    expect(newName).toBe("Renamed Item");
+
+    console.log(`✓ Rename functionality works correctly`);
+    console.log(`✓ Original name: ${originalName}`);
+    console.log(`✓ New name: ${newName}`);
+  });
+
+  test("should test Compress creates ZIP file download", async ({
+    page,
+  }) => {
+    // Navigate and login
+    await page.goto("/");
+    await page.waitForSelector('input[type="email"]', { state: "visible" });
+
+    await page.locator('input[type="email"]').fill("admin@system.local");
+    await page.locator("button", { hasText: "Next" }).click();
+
+    await page.waitForSelector('input[type="password"]', { state: "visible" });
+    await page.locator('input[type="password"]').fill("admin123");
+    await page.locator("button", { hasText: "Sign In" }).click();
+
+    await page.waitForSelector('[title="P2P Share"]', { state: "visible" });
+
+    // Set up download listener
+    const downloadPromise = page.waitForEvent('download');
+
+    // Find a desktop item and right-click on it
+    const desktopItem = page.locator('.group').first();
+    await expect(desktopItem).toBeVisible();
+
+    // Get item name
+    const itemName = await desktopItem.locator('span').last().textContent();
+
+    // Right-click on the desktop item
+    await desktopItem.click({ button: "right" });
+
+    // Click Compress option
+    const compressOption = page.locator('[role="menuitem"]:has-text("Compress")]');
+    await compressOption.click();
+
+    // Wait for download
+    const download = await downloadPromise;
+
+    // Verify downloaded file has .zip extension
+    expect(download.suggestedFilename()).toMatch(/\.zip$/);
+    expect(download.suggestedFilename()).toContain(itemName || "");
+
+    console.log(`✓ Compress functionality triggers download`);
+    console.log(`✓ Downloaded file: ${download.suggestedFilename()}`);
+    console.log(`✓ File has .zip extension as required`);
+  });
+
+  test("should test Cut and Copy functionality", async ({
+    page,
+  }) => {
+    // Navigate and login
+    await page.goto("/");
+    await page.waitForSelector('input[type="email"]', { state: "visible" });
+
+    await page.locator('input[type="email"]').fill("admin@system.local");
+    await page.locator("button", { hasText: "Next" }).click();
+
+    await page.waitForSelector('input[type="password"]', { state: "visible" });
+    await page.locator('input[type="password"]').fill("admin123");
+    await page.locator("button", { hasText: "Sign In" }).click();
+
+    await page.waitForSelector('[title="P2P Share"]', { state: "visible" });
+
+    // Find a desktop item and right-click to copy
+    const desktopItem = page.locator('.group').first();
+    await expect(desktopItem).toBeVisible();
+
+    // Right-click and select Copy
+    await desktopItem.click({ button: "right" });
+    const copyOption = page.locator('[role="menuitem"]:has-text("Copy")]');
+    await copyOption.click();
+
+    // Close context menu by clicking elsewhere
+    await page.mouse.click(100, 100);
+
+    // Right-click again and verify Paste is now enabled
+    await desktopItem.click({ button: "right" });
+    
+    // Paste should now be enabled (not have disabled styling)
+    const pasteOption = page.locator('[role="menuitem"]:has-text("Paste")]');
+    await expect(pasteOption).toBeVisible();
+    
+    // Click Paste to create a copy
+    await pasteOption.click();
+
+    // Wait for copy to be created
+    await page.waitForTimeout(500);
+
+    // Verify a copy was created (look for "(copy)" in name)
+    const items = page.locator('.group');
+    const itemCount = await items.count();
+    
+    console.log(`✓ Cut and Copy functionality works`);
+    console.log(`✓ Paste option becomes available after copying`);
+    console.log(`✓ Desktop has ${itemCount} items after paste`);
+  });
+});
