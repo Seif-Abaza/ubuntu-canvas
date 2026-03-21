@@ -367,6 +367,9 @@ const P2PGroupApp = () => {
         <button onClick={toggleVideo} className={`w-9 h-9 rounded-full flex items-center justify-center text-sm transition-colors ${videoEnabled ? 'bg-secondary/50 text-foreground hover:bg-secondary' : 'bg-destructive/20 text-destructive'}`} title={videoEnabled ? 'Stop Video' : 'Start Video'}>
           {videoEnabled ? '📹' : '📷'}
         </button>
+        <button onClick={toggleScreenShare} className={`w-9 h-9 rounded-full flex items-center justify-center text-sm transition-colors ${screenSharing ? 'bg-primary text-primary-foreground' : 'bg-secondary/50 text-foreground hover:bg-secondary'}`} title={screenSharing ? 'Stop Sharing' : 'Share Screen'}>
+          🖥️
+        </button>
         <button onClick={leaveRoom} className="w-9 h-9 rounded-full flex items-center justify-center text-sm bg-destructive text-destructive-foreground hover:bg-destructive/90 active:scale-[0.95] transition-all" title="Leave">
           📞
         </button>
