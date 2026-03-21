@@ -193,7 +193,41 @@ const P2PGroupApp = () => {
     setVideoEnabled(!videoEnabled);
   };
 
+  const toggleScreenShare = async () => {
+    if (screenSharing) {
+      screenStream.current?.getTracks().forEach(t => t.stop());
+      screenStream.current = null;
+      if (localStream) {
+        const camTrack = localStream.getVideoTracks()[0];
+        if (camTrack) {
+          peerConnections.current.forEach(pc => {
+            const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+            if (sender) sender.replaceTrack(camTrack);
+          });
+        }
+        if (localVideoRef.current) localVideoRef.current.srcObject = localStream;
+      }
+      setScreenSharing(false);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        screenStream.current = stream;
+        const screenTrack = stream.getVideoTracks()[0];
+        peerConnections.current.forEach(pc => {
+          const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) sender.replaceTrack(screenTrack);
+        });
+        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+        setScreenSharing(true);
+        screenTrack.onended = () => { toggleScreenShare(); };
+      } catch (err) {
+        console.error('Screen share error:', err);
+      }
+    }
+  };
+
   const leaveRoom = () => {
+    screenStream.current?.getTracks().forEach(t => t.stop());
     localStream?.getTracks().forEach(t => t.stop());
     peerConnections.current.forEach(pc => pc.close());
     peerConnections.current.clear();
@@ -201,6 +235,7 @@ const P2PGroupApp = () => {
     if (roomChannel.current) supabase.removeChannel(roomChannel.current);
     setInRoom(false);
     setLocalStream(null);
+    setScreenSharing(false);
     setPeers([]);
     setMessages([]);
   };
