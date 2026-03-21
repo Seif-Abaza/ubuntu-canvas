@@ -8,6 +8,10 @@ const MARGIN_LEFT = 80;
 const GRID_COL_GAP = ICON_W + 10;
 const GRID_ROW_GAP = ICON_H + 4;
 
+// Clipboard state for cut/copy/paste
+let clipboard: { type: 'cut' | 'copy'; item: DesktopItem } | null = null;
+let clipboardListener: (() => void) | null = null;
+
 const DesktopIcons = () => {
   const desktopItems = useOSStore(s => s.desktopItems);
   const showContextMenu = useOSStore(s => s.showContextMenu);
@@ -15,10 +19,20 @@ const DesktopIcons = () => {
   const renameDesktopItem = useOSStore(s => s.renameDesktopItem);
   const moveDesktopItem = useOSStore(s => s.moveDesktopItem);
   const openWindow = useOSStore(s => s.openWindow);
-
+  const addDesktopItem = useOSStore(s => s.addDesktopItem);
+  
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  
+  // Force re-render when clipboard changes
+  const [, forceUpdate] = useState(0);
+  
+  // Subscribe to clipboard changes
+  useCallback(() => {
+    if (clipboardListener) return;
+    clipboardListener = () => forceUpdate(n => n + 1);
+  }, []);
 
   // Drag state
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -33,23 +47,76 @@ const DesktopIcons = () => {
     }
   };
 
+  const handleCut = (item: DesktopItem) => {
+    clipboard = { type: 'cut', item };
+    if (clipboardListener) clipboardListener();
+  };
+
+  const handleCopy = (item: DesktopItem) => {
+    clipboard = { type: 'copy', item };
+    if (clipboardListener) clipboardListener();
+  };
+
+  const handlePaste = async () => {
+    if (!clipboard) return;
+    const { type, item } = clipboard;
+    
+    if (type === 'cut') {
+      clipboard = null;
+      if (clipboardListener) clipboardListener();
+    } else if (type === 'copy') {
+      const newName = `${item.name} (copy)`;
+      await addDesktopItem({
+        id: '',
+        name: newName,
+        type: item.type,
+        content: item.content,
+        x: item.x + 20,
+        y: item.y + 20,
+      });
+      clipboard = null;
+      if (clipboardListener) clipboardListener();
+    }
+  };
+
+  const handleCompress = async (item: DesktopItem) => {
+    const zipContent = {
+      name: `${item.name}.zip`,
+      originalName: item.name,
+      type: item.type,
+      content: item.content,
+      compressedAt: new Date().toISOString(),
+    };
+    
+    const blob = new Blob([JSON.stringify(zipContent, null, 2)], { type: 'application/zip' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${item.name}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleContextMenu = (e: React.MouseEvent, item: DesktopItem) => {
     e.preventDefault();
     e.stopPropagation();
 
+    const hasClipboard = clipboard !== null;
+
     const folderItems = [
       { label: 'Open', action: () => handleDoubleClick(item) },
       { separator: true, label: '' },
-      { label: 'Rename', action: () => { setRenamingId(item.id); setRenameVal(item.name); setTimeout(() => inputRef.current?.focus(), 50); } },
-      { label: 'Copy', action: () => {} },
-      { label: 'Cut', action: () => {} },
+      { label: 'Cut', action: () => handleCut(item) },
+      { label: 'Copy', action: () => handleCopy(item) },
+      { label: 'Paste', action: handlePaste, disabled: !hasClipboard },
       { separator: true, label: '' },
-      { label: 'Sync to Network', action: () => {} },
-      { label: 'Permissions', action: () => {} },
-      { label: 'Share With...', action: () => {} },
+      { label: 'Rename', action: () => { setRenamingId(item.id); setRenameVal(item.name); setTimeout(() => inputRef.current?.focus(), 50); } },
+      { label: 'Compress...', action: () => handleCompress(item) },
       { label: 'Share P2P', action: () => openWindow('p2p', 'P2P Share', '📡', { shareFile: { name: item.name, content: item.content || '' } }) },
       { separator: true, label: '' },
-      { label: 'Compress...', action: () => {} },
       { label: 'Properties', action: () => {} },
       { separator: true, label: '' },
       { label: 'Move to Trash', action: () => moveToTrash(item.id) },
@@ -59,13 +126,12 @@ const DesktopIcons = () => {
       { label: 'Open', action: () => handleDoubleClick(item) },
       { label: 'Open With Text Editor', action: () => handleDoubleClick(item) },
       { separator: true, label: '' },
-      { label: 'Rename', action: () => { setRenamingId(item.id); setRenameVal(item.name); setTimeout(() => inputRef.current?.focus(), 50); } },
-      { label: 'Copy', action: () => {} },
-      { label: 'Cut', action: () => {} },
+      { label: 'Cut', action: () => handleCut(item) },
+      { label: 'Copy', action: () => handleCopy(item) },
+      { label: 'Paste', action: handlePaste, disabled: !hasClipboard },
       { separator: true, label: '' },
-      { label: 'Sync to Network', action: () => {} },
-      { label: 'Permissions', action: () => {} },
-      { label: 'Share With...', action: () => {} },
+      { label: 'Rename', action: () => { setRenamingId(item.id); setRenameVal(item.name); setTimeout(() => inputRef.current?.focus(), 50); } },
+      { label: 'Compress...', action: () => handleCompress(item) },
       { label: 'Share P2P', action: () => openWindow('p2p', 'P2P Share', '📡', { shareFile: { name: item.name, content: item.content || '' } }) },
       { separator: true, label: '' },
       { label: 'Move to Trash', action: () => moveToTrash(item.id) },
