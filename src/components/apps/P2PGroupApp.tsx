@@ -308,11 +308,11 @@ const P2PGroupApp = () => {
               <video
                 ref={localVideoRef}
                 className="w-full h-full object-cover"
-                style={{ transform: 'scaleX(-1)' }}
+                style={{ transform: screenSharing ? 'none' : 'scaleX(-1)' }}
                 autoPlay muted playsInline
               />
               <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-background/70 text-[10px] text-foreground">
-                You ({username})
+                {screenSharing ? '🖥️ Screen' : `You (${username})`}
               </div>
             </div>
 
