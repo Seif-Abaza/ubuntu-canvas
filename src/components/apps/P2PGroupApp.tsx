@@ -195,49 +195,6 @@ const P2PGroupApp = () => {
 
   const toggleScreenShare = async () => {
     if (screenSharing) {
-<<<<<<< HEAD
-      // Stop screen sharing
-      screenStream?.getTracks().forEach(track => track.stop());
-      setScreenStream(null);
-      setScreenSharing(false);
-      
-      // Re-add camera video track to all peer connections
-      const cameraVideoTrack = localStream?.getVideoTracks()[0];
-      if (cameraVideoTrack && localStream) {
-        peerConnections.current.forEach(pc => {
-          const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-          if (sender) {
-            sender.replaceTrack(cameraVideoTrack);
-          }
-        });
-      }
-    } else {
-      // Start screen sharing
-      try {
-        const screen = await navigator.mediaDevices.getDisplayMedia({ 
-          video: { cursor: 'always' },
-          audio: false 
-        });
-        
-        setScreenStream(screen);
-        setScreenSharing(true);
-        
-        const screenVideoTrack = screen.getVideoTracks()[0];
-        
-        // Replace video track in all peer connections with screen share
-        peerConnections.current.forEach(pc => {
-          const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-          if (sender) {
-            sender.replaceTrack(screenVideoTrack);
-          }
-        });
-        
-        // Listen for user stopping screen share via browser UI
-        screenVideoTrack.onended = () => {
-          toggleScreenShare();
-        };
-      } catch (err: any) {
-=======
       screenStream.current?.getTracks().forEach(t => t.stop());
       screenStream.current = null;
       if (localStream) {
@@ -264,7 +221,6 @@ const P2PGroupApp = () => {
         setScreenSharing(true);
         screenTrack.onended = () => { toggleScreenShare(); };
       } catch (err) {
->>>>>>> efff3587fc3f07924a2e028def3710b0aa71d7f7
         console.error('Screen share error:', err);
       }
     }
