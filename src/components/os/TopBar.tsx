@@ -5,6 +5,9 @@ const TopBar = () => {
   const [time, setTime] = useState(new Date());
   const focusedWindowId = useOSStore(s => s.focusedWindowId);
   const windows = useOSStore(s => s.windows);
+  const username = useOSStore(s => s.username);
+  const userAvatar = useOSStore(s => s.userAvatar);
+  const openWindow = useOSStore(s => s.openWindow);
   const focusedWindow = windows.find(w => w.id === focusedWindowId);
 
   useEffect(() => {
@@ -32,12 +35,27 @@ const TopBar = () => {
         {dateStr} {timeStr}
       </div>
 
-      {/* Right: Status */}
+      {/* Right: Status + AI + User */}
       <div className="flex items-center gap-2 text-xs text-foreground">
+        <button
+          onClick={() => openWindow('ai', 'AI Assistant', '🤖')}
+          className="hover:opacity-70 transition-opacity"
+          title="AI Assistant"
+        >
+          🤖
+        </button>
         <span>🔊</span>
         <span>📶</span>
         <span>🔋</span>
-        <span className="text-[10px]">▼</span>
+        <div className="flex items-center gap-1.5 ml-1 cursor-pointer hover:opacity-70 transition-opacity">
+          {userAvatar ? (
+            <img src={userAvatar} alt="" className="w-4 h-4 rounded-full" />
+          ) : (
+            <span className="text-[10px]">👤</span>
+          )}
+          <span className="text-[10px]">{username}</span>
+          <span className="text-[10px]">▼</span>
+        </div>
       </div>
     </div>
   );
