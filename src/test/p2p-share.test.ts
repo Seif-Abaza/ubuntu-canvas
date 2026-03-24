@@ -1,4 +1,4 @@
-import { test, expect } from "../playwright-fixture";
+import { test, expect } from "@playwright/test";
 
 test.describe("P2P Share App", () => {
   test("should login with admin credentials, open P2P Share app, create room code and discover peers", async ({
