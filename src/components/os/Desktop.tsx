@@ -13,6 +13,9 @@ import TextEditor from '@/components/apps/TextEditor';
 import P2PShareApp from '@/components/apps/P2PShareApp';
 import P2PGroupApp from '@/components/apps/P2PGroupApp';
 import TrashApp from '@/components/apps/TrashApp';
+import AIAssistant from '@/components/apps/AIAssistant';
+import SystemMonitor from '@/components/apps/SystemMonitor';
+import WebPublisher from '@/components/apps/WebPublisher';
 import { AnimatePresence } from 'framer-motion';
 
 import wpDefault from '@/assets/wallpaper-default.jpg';
@@ -51,6 +54,12 @@ const getAppContent = (win: ReturnType<typeof useOSStore.getState>['windows'][0]
       return <P2PGroupApp />;
     case 'trash':
       return <TrashApp />;
+    case 'ai':
+      return <AIAssistant />;
+    case 'sysmonitor':
+      return <SystemMonitor />;
+    case 'webpublisher':
+      return <WebPublisher />;
     default:
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -64,23 +73,23 @@ const Desktop = () => {
   const { windows, wallpaper, showContextMenu, logout, addDesktopItem } = useOSStore();
 
   const createNewFolder = () => {
-    const id = `folder-${Date.now()}`;
+    const name = `New Folder ${Date.now().toString(36)}`;
     addDesktopItem({
-      id, name: 'New Folder', type: 'folder',
+      id: name, name, type: 'folder',
       children: [],
       x: 0, y: 0,
     });
   };
 
   const createNewNote = () => {
-    const id = `note-${Date.now()}`;
+    const name = `Untitled Note ${Date.now().toString(36)}.txt`;
     const item = {
-      id, name: 'Untitled Note.txt', type: 'note' as const,
+      id: name, name, type: 'note' as const,
       content: '',
       x: 0, y: 0,
     };
     addDesktopItem(item);
-    useOSStore.getState().openWindow('texteditor', item.name, '📝', { noteId: id, content: '', fileName: item.name });
+    useOSStore.getState().openWindow('texteditor', item.name, '📝', { noteId: name, content: '', fileName: item.name });
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
