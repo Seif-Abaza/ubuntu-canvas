@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { supabase } from '@/integrations/supabase/client';
+import { getPuter } from '@/lib/puter';
 
 export interface AppWindow {
   id: string;
@@ -26,11 +26,11 @@ export interface DesktopItem {
   id: string;
   name: string;
   type: 'folder' | 'note';
-  content?: string; // for notes
-  children?: DesktopItem[]; // for folders
+  content?: string;
+  children?: DesktopItem[];
   x: number;
   y: number;
-  deletedAt?: number; // timestamp when moved to trash, undefined if not deleted
+  deletedAt?: number;
 }
 
 export interface TrashItem extends DesktopItem {
@@ -47,6 +47,7 @@ interface OSState {
   isLoggedIn: boolean;
   username: string;
   userId: string | null;
+  userAvatar: string | null;
   isAdmin: boolean;
   isLoading: boolean;
   wallpaper: string;
@@ -61,7 +62,7 @@ interface OSState {
   trashItems: TrashItem[];
 
   initAuth: () => Promise<void>;
-  login: (email: string, password: string) => Promise<{ error?: string }>;
+  login: () => Promise<{ error?: string }>;
   logout: () => Promise<void>;
   setWallpaper: (wp: string) => void;
   setAccentColor: (color: string) => void;
@@ -86,6 +87,9 @@ interface OSState {
   updateDesktopItemContent: (id: string, content: string) => Promise<void>;
   moveDesktopItem: (id: string, x: number, y: number) => Promise<void>;
 
+  savePreferences: () => Promise<void>;
+  loadPreferences: () => Promise<void>;
+
   showContextMenu: (x: number, y: number, items: ContextMenuItem[]) => void;
   hideContextMenu: () => void;
 }
@@ -94,37 +98,40 @@ const defaultDockApps: DockApp[] = [
   { id: 'files', name: 'Files', icon: '📁' },
   { id: 'terminal', name: 'Terminal', icon: '🖥️' },
   { id: 'settings', name: 'Settings', icon: '⚙️' },
-  { id: 'ipfs', name: 'IPFS Explorer', icon: '🌐' },
-  { id: 'fabric', name: 'Fabric Network', icon: '🔗' },
+  { id: 'ai', name: 'AI Assistant', icon: '🤖' },
   { id: 'texteditor', name: 'Text Editor', icon: '📝' },
   { id: 'p2p', name: 'P2P Share', icon: '📡' },
   { id: 'p2pgroup', name: 'P2P Group', icon: '🎥' },
+  { id: 'sysmonitor', name: 'System Monitor', icon: '📊' },
   { id: 'trash', name: 'Trash', icon: '🗑️' },
 ];
 
-async function checkAdmin(userId: string): Promise<boolean> {
-  const { data } = await supabase
-    .from('user_roles')
-    .select('role')
-    .eq('user_id', userId)
-    .eq('role', 'admin')
-    .maybeSingle();
-  return !!data;
+const DESKTOP_DIR = '/Desktop';
+const TRASH_DIR = '/Desktop/.trash';
+
+// Helper to ensure directories exist
+async function ensureDir(path: string) {
+  try {
+    const p = getPuter();
+    await p.fs.stat(path);
+  } catch {
+    try {
+      const p = getPuter();
+      await p.fs.mkdir(path, { createMissingParents: true });
+    } catch { /* already exists */ }
+  }
 }
 
-async function getProfile(userId: string) {
-  const { data } = await supabase
-    .from('profiles')
-    .select('username')
-    .eq('user_id', userId)
-    .maybeSingle();
-  return data;
+// Serialize desktop item metadata to JSON
+function serializeItem(item: DesktopItem): string {
+  return JSON.stringify({ name: item.name, type: item.type, x: item.x, y: item.y, content: item.content || '' });
 }
 
 export const useOSStore = create<OSState>((set, get) => ({
   isLoggedIn: false,
   username: '',
   userId: null,
+  userAvatar: null,
   isAdmin: false,
   isLoading: true,
   wallpaper: 'default',
@@ -140,44 +147,20 @@ export const useOSStore = create<OSState>((set, get) => ({
 
   initAuth: async () => {
     try {
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session?.user) {
-          const profile = await getProfile(session.user.id);
-          const admin = await checkAdmin(session.user.id);
-          set({
-            isLoggedIn: true,
-            username: profile?.username || session.user.email || '',
-            userId: session.user.id,
-            isAdmin: admin,
-            isLoading: false,
-          });
-          // Load desktop items after auth state is set
-          get().loadDesktopItems();
-        } else {
-          set({
-            isLoggedIn: false, username: '', userId: null, isAdmin: false,
-            windows: [], focusedWindowId: null, nextZIndex: 10, isLoading: false,
-          });
-        }
-      });
-
-      // Race getSession against a timeout to prevent infinite loading
-      const sessionPromise = supabase.auth.getSession();
-      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
-      const result = await Promise.race([sessionPromise, timeoutPromise]);
-      
-      if (result && 'data' in result && result.data.session?.user) {
-        const session = result.data.session;
-        const profile = await getProfile(session.user.id);
-        const admin = await checkAdmin(session.user.id);
+      const p = getPuter();
+      // Check if already authenticated
+      if (p.auth.isSignedIn()) {
+        const user = p.auth.getUser();
         set({
           isLoggedIn: true,
-          username: profile?.username || session.user.email || '',
-          userId: session.user.id,
-          isAdmin: admin,
+          username: user?.username || 'User',
+          userId: user?.uuid || user?.username || null,
+          userAvatar: user?.profile_image || null,
+          isAdmin: true, // Puter users have full control
           isLoading: false,
         });
-        get().loadDesktopItems();
+        await get().loadPreferences();
+        await get().loadDesktopItems();
       } else {
         set({ isLoading: false });
       }
@@ -187,24 +170,84 @@ export const useOSStore = create<OSState>((set, get) => ({
     }
   },
 
-  login: async (email, password) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
-    return {};
+  login: async () => {
+    try {
+      const p = getPuter();
+      await p.auth.signIn();
+      const user = p.auth.getUser();
+      set({
+        isLoggedIn: true,
+        username: user?.username || 'User',
+        userId: user?.uuid || user?.username || null,
+        userAvatar: user?.profile_image || null,
+        isAdmin: true,
+        isLoading: false,
+      });
+      await get().loadPreferences();
+      await get().loadDesktopItems();
+      return {};
+    } catch (err: any) {
+      return { error: err?.message || 'Sign in cancelled' };
+    }
   },
 
   logout: async () => {
-    await supabase.auth.signOut();
-    set({ isLoggedIn: false, username: '', userId: null, isAdmin: false, windows: [], focusedWindowId: null, nextZIndex: 10 });
+    try {
+      const p = getPuter();
+      await p.auth.signOut();
+    } catch {}
+    set({
+      isLoggedIn: false, username: '', userId: null, userAvatar: null, isAdmin: false,
+      windows: [], focusedWindowId: null, nextZIndex: 10, desktopItems: [], trashItems: [],
+    });
   },
 
-  setWallpaper: (wp) => set({ wallpaper: wp }),
-  setAccentColor: (color) => set({ accentColor: color }),
-  setDockAutoHide: (v) => set({ dockAutoHide: v }),
+  setWallpaper: (wp) => {
+    set({ wallpaper: wp });
+    get().savePreferences();
+  },
+  setAccentColor: (color) => {
+    set({ accentColor: color });
+    get().savePreferences();
+  },
+  setDockAutoHide: (v) => {
+    set({ dockAutoHide: v });
+    get().savePreferences();
+  },
+
+  savePreferences: async () => {
+    try {
+      const p = getPuter();
+      const prefs = {
+        wallpaper: get().wallpaper,
+        accentColor: get().accentColor,
+        dockAutoHide: get().dockAutoHide,
+      };
+      await p.kv.set('desktop_preferences', JSON.stringify(prefs));
+    } catch (err) {
+      console.error('Failed to save preferences:', err);
+    }
+  },
+
+  loadPreferences: async () => {
+    try {
+      const p = getPuter();
+      const val = await p.kv.get('desktop_preferences');
+      if (val) {
+        const prefs = JSON.parse(val);
+        set({
+          wallpaper: prefs.wallpaper || 'default',
+          accentColor: prefs.accentColor || 'orange',
+          dockAutoHide: prefs.dockAutoHide || false,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load preferences:', err);
+    }
+  },
 
   openWindow: (appId, title, icon, appData) => {
     const { windows, nextZIndex } = get();
-    // For texteditor with different appData, allow multiple
     if (appId !== 'texteditor') {
       const existing = windows.find(w => w.appId === appId);
       if (existing) {
@@ -220,8 +263,8 @@ export const useOSStore = create<OSState>((set, get) => ({
       id: `${appId}-${Date.now()}`,
       appId, title, icon,
       x: 120 + offset, y: 40 + offset,
-      width: appId === 'settings' ? 900 : appId === 'texteditor' ? 600 : 700,
-      height: appId === 'settings' ? 580 : appId === 'texteditor' ? 450 : 500,
+      width: appId === 'settings' ? 900 : appId === 'texteditor' ? 600 : appId === 'ai' ? 500 : 700,
+      height: appId === 'settings' ? 580 : appId === 'texteditor' ? 450 : appId === 'ai' ? 600 : 500,
       minimized: false, maximized: false,
       zIndex: nextZIndex,
       appData,
@@ -270,33 +313,96 @@ export const useOSStore = create<OSState>((set, get) => ({
   },
 
   loadDesktopItems: async () => {
-    const userId = get().userId;
-    if (!userId) return;
-    const { data } = await supabase
-      .from('desktop_items')
-      .select('*')
-      .eq('user_id', userId);
-    if (data) {
-      set({
-        desktopItems: data.map((d: any) => ({
-          id: d.id,
-          name: d.name,
-          type: d.type as 'folder' | 'note',
-          content: d.content || '',
-          x: d.x,
-          y: d.y,
-        })),
-      });
+    try {
+      await ensureDir(DESKTOP_DIR);
+      await ensureDir(TRASH_DIR);
+      const p = getPuter();
+      
+      // Load desktop items
+      const entries = await p.fs.readdir(DESKTOP_DIR);
+      const items: DesktopItem[] = [];
+      
+      for (const entry of entries) {
+        if (entry.name.startsWith('.')) continue; // skip hidden
+        if (entry.is_dir) {
+          // Try to read metadata
+          let meta = { x: 80 + items.length * 100, y: 36 };
+          try {
+            const metaBlob = await p.fs.read(`${DESKTOP_DIR}/${entry.name}/.meta.json`);
+            const metaText = await metaBlob.text();
+            meta = { ...meta, ...JSON.parse(metaText) };
+          } catch {}
+          items.push({
+            id: entry.name,
+            name: entry.name,
+            type: 'folder',
+            x: meta.x,
+            y: meta.y,
+            children: [],
+          });
+        } else if (entry.name.endsWith('.meta.json')) {
+          // skip meta files at root level
+          continue;
+        } else {
+          let content = '';
+          let meta = { x: 80 + items.length * 100, y: 36 };
+          try {
+            const blob = await p.fs.read(`${DESKTOP_DIR}/${entry.name}`);
+            content = await blob.text();
+          } catch {}
+          try {
+            const metaBlob = await p.fs.read(`${DESKTOP_DIR}/${entry.name}.meta.json`);
+            const metaText = await metaBlob.text();
+            meta = { ...meta, ...JSON.parse(metaText) };
+          } catch {}
+          items.push({
+            id: entry.name,
+            name: entry.name,
+            type: 'note',
+            content,
+            x: meta.x,
+            y: meta.y,
+          });
+        }
+      }
+      set({ desktopItems: items });
+
+      // Load trash items
+      try {
+        const trashEntries = await p.fs.readdir(TRASH_DIR);
+        const trash: TrashItem[] = [];
+        for (const entry of trashEntries) {
+          if (entry.name.endsWith('.meta.json')) continue;
+          let content = '';
+          let meta: any = { x: 0, y: 0, deletedAt: Date.now(), type: 'note', originalName: entry.name };
+          try {
+            const metaBlob = await p.fs.read(`${TRASH_DIR}/${entry.name}.meta.json`);
+            meta = { ...meta, ...JSON.parse(await metaBlob.text()) };
+          } catch {}
+          if (!entry.is_dir) {
+            try {
+              const blob = await p.fs.read(`${TRASH_DIR}/${entry.name}`);
+              content = await blob.text();
+            } catch {}
+          }
+          trash.push({
+            id: entry.name,
+            name: meta.originalName || entry.name,
+            type: entry.is_dir ? 'folder' : 'note',
+            content,
+            x: meta.x || 0,
+            y: meta.y || 0,
+            deletedAt: meta.deletedAt || Date.now(),
+          });
+        }
+        set({ trashItems: trash });
+      } catch {}
+    } catch (err) {
+      console.error('Failed to load desktop items:', err);
     }
-    // Load trash items from localStorage
-    const trashKey = `trash_${userId}`;
-    const trashItems = JSON.parse(localStorage.getItem(trashKey) || '[]');
-    set({ trashItems });
   },
 
   addDesktopItem: async (item) => {
-    const userId = get().userId;
-    if (!userId) return;
     const items = get().desktopItems;
     let x = item.x, y = item.y;
     if (x === 0 && y === 0) {
@@ -305,102 +411,142 @@ export const useOSStore = create<OSState>((set, get) => ({
       x = 80 + col * 100;
       y = 36 + row * 94;
     }
-    const { data } = await supabase
-      .from('desktop_items')
-      .insert({ user_id: userId, name: item.name, type: item.type, content: item.content || '', x, y })
-      .select()
-      .single();
-    if (data) {
+    
+    try {
+      const p = getPuter();
+      const fileName = item.name;
+      
+      if (item.type === 'folder') {
+        await p.fs.mkdir(`${DESKTOP_DIR}/${fileName}`);
+        await p.fs.write(`${DESKTOP_DIR}/${fileName}/.meta.json`, JSON.stringify({ x, y }));
+      } else {
+        await p.fs.write(`${DESKTOP_DIR}/${fileName}`, item.content || '');
+        await p.fs.write(`${DESKTOP_DIR}/${fileName}.meta.json`, JSON.stringify({ x, y }));
+      }
+      
       set({
-        desktopItems: [...get().desktopItems, { id: data.id, name: data.name, type: data.type as 'folder' | 'note', content: data.content || '', x: data.x, y: data.y }],
+        desktopItems: [...get().desktopItems, { ...item, id: fileName, x, y }],
       });
+    } catch (err) {
+      console.error('Failed to add desktop item:', err);
     }
   },
 
   removeDesktopItem: async (id) => {
-    await supabase.from('desktop_items').delete().eq('id', id);
+    try {
+      const p = getPuter();
+      await p.fs.delete(`${DESKTOP_DIR}/${id}`, { recursive: true });
+      try { await p.fs.delete(`${DESKTOP_DIR}/${id}.meta.json`); } catch {}
+    } catch (err) {
+      console.error('Failed to remove desktop item:', err);
+    }
     set({ desktopItems: get().desktopItems.filter(i => i.id !== id) });
   },
 
   moveToTrash: async (id) => {
     const item = get().desktopItems.find(i => i.id === id);
     if (!item) return;
-    // Add to trash with timestamp
     const trashItem: TrashItem = { ...item, deletedAt: Date.now() };
-    set({ 
+    
+    try {
+      const p = getPuter();
+      // Move file to trash directory
+      await p.fs.rename(`${DESKTOP_DIR}/${id}`, `${TRASH_DIR}/${id}`);
+      // Save trash metadata
+      await p.fs.write(`${TRASH_DIR}/${id}.meta.json`, JSON.stringify({
+        originalName: item.name, x: item.x, y: item.y, deletedAt: trashItem.deletedAt, type: item.type,
+      }));
+      try { await p.fs.delete(`${DESKTOP_DIR}/${id}.meta.json`); } catch {}
+    } catch (err) {
+      console.error('Failed to move to trash:', err);
+    }
+    
+    set({
       desktopItems: get().desktopItems.filter(i => i.id !== id),
-      trashItems: [...get().trashItems, trashItem]
+      trashItems: [...get().trashItems, trashItem],
     });
-    // Store in localStorage for persistence (simple approach)
-    const trashKey = `trash_${get().userId}`;
-    const existingTrash = JSON.parse(localStorage.getItem(trashKey) || '[]');
-    localStorage.setItem(trashKey, JSON.stringify([...existingTrash, trashItem]));
   },
 
   restoreFromTrash: async (id) => {
     const trashItems = get().trashItems;
     const item = trashItems.find(t => t.id === id);
     if (!item) return;
-    // Restore to desktop
-    const userId = get().userId;
-    if (!userId) return;
-    const { data } = await supabase
-      .from('desktop_items')
-      .insert({ user_id: userId, name: item.name, type: item.type, content: item.content || '', x: item.x, y: item.y })
-      .select()
-      .single();
-    if (data) {
-      set({
-        desktopItems: [...get().desktopItems, { id: data.id, name: data.name, type: data.type as 'folder' | 'note', content: data.content || '', x: data.x, y: data.y }],
-        trashItems: trashItems.filter(t => t.id !== id)
-      });
-      // Update localStorage
-      const trashKey = `trash_${userId}`;
-      const existingTrash = JSON.parse(localStorage.getItem(trashKey) || '[]');
-      localStorage.setItem(trashKey, JSON.stringify(existingTrash.filter((t: any) => t.id !== id)));
+    
+    try {
+      const p = getPuter();
+      await p.fs.rename(`${TRASH_DIR}/${id}`, `${DESKTOP_DIR}/${id}`);
+      await p.fs.write(`${DESKTOP_DIR}/${id}.meta.json`, JSON.stringify({ x: item.x, y: item.y }));
+      try { await p.fs.delete(`${TRASH_DIR}/${id}.meta.json`); } catch {}
+    } catch (err) {
+      console.error('Failed to restore from trash:', err);
     }
+    
+    set({
+      desktopItems: [...get().desktopItems, { ...item, deletedAt: undefined }],
+      trashItems: trashItems.filter(t => t.id !== id),
+    });
   },
 
   permanentDelete: async (id) => {
-    const userId = get().userId;
-    if (!userId) return;
-    // Remove from database
-    await supabase.from('desktop_items').delete().eq('id', id);
-    // Remove from trash
+    try {
+      const p = getPuter();
+      await p.fs.delete(`${TRASH_DIR}/${id}`, { recursive: true });
+      try { await p.fs.delete(`${TRASH_DIR}/${id}.meta.json`); } catch {}
+    } catch (err) {
+      console.error('Failed to permanently delete:', err);
+    }
     set({ trashItems: get().trashItems.filter(t => t.id !== id) });
-    // Update localStorage
-    const trashKey = `trash_${userId}`;
-    const existingTrash = JSON.parse(localStorage.getItem(trashKey) || '[]');
-    localStorage.setItem(trashKey, JSON.stringify(existingTrash.filter((t: any) => t.id !== id)));
   },
 
   emptyTrash: async () => {
-    const userId = get().userId;
-    if (!userId) return;
     const trashItems = get().trashItems;
-    // Delete all from database
-    const ids = trashItems.map(t => t.id);
-    if (ids.length > 0) {
-      await supabase.from('desktop_items').delete().in('id', ids);
+    try {
+      const p = getPuter();
+      for (const item of trashItems) {
+        try { await p.fs.delete(`${TRASH_DIR}/${item.id}`, { recursive: true }); } catch {}
+        try { await p.fs.delete(`${TRASH_DIR}/${item.id}.meta.json`); } catch {}
+      }
+    } catch (err) {
+      console.error('Failed to empty trash:', err);
     }
     set({ trashItems: [] });
-    localStorage.removeItem(`trash_${userId}`);
   },
 
   renameDesktopItem: async (id, name) => {
-    await supabase.from('desktop_items').update({ name }).eq('id', id);
-    set({ desktopItems: get().desktopItems.map(i => i.id === id ? { ...i, name } : i) });
+    try {
+      const p = getPuter();
+      await p.fs.rename(`${DESKTOP_DIR}/${id}`, `${DESKTOP_DIR}/${name}`);
+      // Rename meta too
+      try { await p.fs.rename(`${DESKTOP_DIR}/${id}.meta.json`, `${DESKTOP_DIR}/${name}.meta.json`); } catch {}
+    } catch (err) {
+      console.error('Failed to rename:', err);
+    }
+    set({ desktopItems: get().desktopItems.map(i => i.id === id ? { ...i, id: name, name } : i) });
   },
 
   updateDesktopItemContent: async (id, content) => {
-    await supabase.from('desktop_items').update({ content }).eq('id', id);
+    try {
+      const p = getPuter();
+      await p.fs.write(`${DESKTOP_DIR}/${id}`, content);
+    } catch (err) {
+      console.error('Failed to update content:', err);
+    }
     set({ desktopItems: get().desktopItems.map(i => i.id === id ? { ...i, content } : i) });
   },
 
   moveDesktopItem: async (id, x, y) => {
-    // Update locally immediately for responsiveness
     set({ desktopItems: get().desktopItems.map(i => i.id === id ? { ...i, x, y } : i) });
-    await supabase.from('desktop_items').update({ x, y }).eq('id', id);
+    try {
+      const p = getPuter();
+      const item = get().desktopItems.find(i => i.id === id);
+      if (item?.type === 'folder') {
+        await p.fs.write(`${DESKTOP_DIR}/${id}/.meta.json`, JSON.stringify({ x, y }));
+      } else {
+        await p.fs.write(`${DESKTOP_DIR}/${id}.meta.json`, JSON.stringify({ x, y }));
+      }
+    } catch (err) {
+      console.error('Failed to save position:', err);
+    }
   },
 
   showContextMenu: (x, y, items) => set({ contextMenu: { x, y, visible: true, items } }),
