@@ -36,11 +36,7 @@ const P2PGroupApp = () => {
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [screenSharing, setScreenSharing] = useState(false);
-<<<<<<< HEAD
-  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
-=======
   const screenStream = useRef<MediaStream | null>(null);
->>>>>>> efff3587fc3f07924a2e028def3710b0aa71d7f7
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const peerId = useRef(`gp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
