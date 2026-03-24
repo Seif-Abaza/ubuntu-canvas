@@ -229,7 +229,6 @@ const P2PGroupApp = () => {
   const leaveRoom = () => {
     screenStream.current?.getTracks().forEach(t => t.stop());
     localStream?.getTracks().forEach(t => t.stop());
-    screenStream?.getTracks().forEach(t => t.stop());
     peerConnections.current.forEach(pc => pc.close());
     peerConnections.current.clear();
     peerStreams.current.clear();
